@@ -136,6 +136,29 @@
           <button class="btn" type="submit">Salvar proteção</button>
           <p class="form__status" id="ratelimit-status" role="status"></p>
         </form>
+
+        <form id="form-trocar-senha" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Trocar senha mestra</h2>
+          <p class="config__ajuda">
+            Todos os segredos são recriptografados com a nova senha.
+          </p>
+          <label class="field">
+            <span class="field__label">Senha atual</span>
+            <input class="field__input" id="ts-atual" type="password" autocomplete="current-password" />
+          </label>
+          <label class="field">
+            <span class="field__label">Nova senha</span>
+            <input class="field__input" id="ts-nova" type="password" autocomplete="new-password" />
+          </label>
+          <p class="field__erro" id="ts-nova-erro" role="alert"></p>
+          <label class="field">
+            <span class="field__label">Confirmar nova senha</span>
+            <input class="field__input" id="ts-conf" type="password" autocomplete="new-password" />
+          </label>
+          <p class="field__erro" id="ts-conf-erro" role="alert"></p>
+          <button class="btn" type="submit">Trocar senha</button>
+          <p class="form__status" id="ts-status" role="status"></p>
+        </form>
       </section>
 
       <!-- Exportar backup criptografado (task 14) -->

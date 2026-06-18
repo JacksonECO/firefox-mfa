@@ -164,6 +164,19 @@ export async function obterMfa(id) {
 }
 
 /**
+ * Aplica a troca de senha mestra (task 17) em UMA escrita atômica: novo salt,
+ * novo valor de controle, todos os MFAs recriptografados e o contador zerado.
+ */
+export async function aplicarTrocaSenha({ saltBytes, controle, mfas }) {
+  await area().set({
+    [CHAVE_SALT]: cripto.bytesParaBase64(saltBytes),
+    [CHAVE_CONTROLE]: controle,
+    [CHAVE_MFAS]: mfas,
+    [CHAVE_TENTATIVAS]: 0,
+  });
+}
+
+/**
  * Cria um MFA: criptografa o segredo (task 02) e persiste APENAS o ciphertext.
  * O `secretEmClaro` nunca é gravado — só o resultado criptografado + IV.
  * @param {{nome:string, dominio:string|null, secretEmClaro:string}} dados

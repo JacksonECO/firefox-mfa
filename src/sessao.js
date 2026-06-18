@@ -8,6 +8,7 @@
 import * as cripto from './crypto.js';
 import * as storage from './storage.js';
 import { calcularAtraso, normalizarConfigRateLimit } from './ratelimit.js';
+import { TAMANHO_MINIMO_SENHA } from './senha.js';
 
 const TIMEOUT_MS = 2 * 60 * 1000; // expira após 2 min de inatividade
 const NOME_ALARME = 'firefox-mfa-expiracao-sessao';
@@ -82,6 +83,47 @@ export async function desbloquear(senha, { esperar = esperaReal } = {}) {
   await storage.resetarTentativas(); // acerto: zera a fricção
   ativarSessao(chave);
   return true;
+}
+
+/**
+ * Troca a senha mestra (task 17): valida a senha atual, deriva uma nova chave
+ * (novo salt) e RECRIPTOGRAFA todos os segredos com ela (novos IVs), tudo em
+ * uma escrita atômica. Mantém a sessão aberta com a nova chave.
+ * @returns {Promise<{ok: boolean, erro?: string}>}
+ */
+export async function trocarSenhaMestra(senhaAtual, senhaNova) {
+  if (typeof senhaNova !== 'string' || senhaNova.length < TAMANHO_MINIMO_SENHA) {
+    return { ok: false, erro: 'SENHA_NOVA_INVALIDA' };
+  }
+  const salt = await storage.obterSalt();
+  const controle = await storage.obterValorControle();
+  if (!salt || !controle) return { ok: false, erro: 'NAO_INICIALIZADO' };
+
+  // Confirma a senha atual pelo decrypt do valor de controle (timing-safe).
+  const chaveAtual = await cripto.derivarChave(senhaAtual, salt);
+  try {
+    await cripto.descriptografar(controle.ciphertext, controle.iv, chaveAtual);
+  } catch {
+    return { ok: false, erro: 'SENHA_ATUAL_INCORRETA' };
+  }
+
+  const novoSalt = cripto.gerarBytesAleatorios(cripto.TAMANHO_SALT);
+  const novaChave = await cripto.derivarChave(senhaNova, novoSalt);
+
+  // Recifra cada segredo: decripta com a chave antiga, cifra com a nova (novo IV).
+  const todos = await storage.listarMfas();
+  const agora = Date.now();
+  const recifrados = [];
+  for (const mfa of todos) {
+    const segredo = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chaveAtual);
+    const { ciphertext, iv } = await cripto.criptografar(segredo, novaChave);
+    recifrados.push({ ...mfa, secretCriptografado: ciphertext, iv, updatedAt: agora });
+  }
+  const novoControle = await cripto.criptografar(cripto.VALOR_CONTROLE, novaChave);
+
+  await storage.aplicarTrocaSenha({ saltBytes: novoSalt, controle: novoControle, mfas: recifrados });
+  ativarSessao(novaChave);
+  return { ok: true };
 }
 
 /** Ativa a sessão com uma chave já derivada e (re)inicia o timer. */

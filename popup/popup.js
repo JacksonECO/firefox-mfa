@@ -83,6 +83,7 @@ function ligarEventos() {
   $('btn-config').addEventListener('click', abrirConfig);
   $('config-voltar').addEventListener('click', abrirPrincipal);
   $('form-ratelimit').addEventListener('submit', aoSalvarRateLimit);
+  $('form-trocar-senha').addEventListener('submit', aoTrocarSenha);
 
   $('form-mfa').addEventListener('submit', aoSalvarFormulario);
   $('form-voltar').addEventListener('click', abrirPrincipal);
@@ -406,6 +407,12 @@ async function aoImportar(evento) {
 async function abrirConfig() {
   mostrarVista('config');
   limpar($('ratelimit-status'));
+  limpar($('ts-status'));
+  limpar($('ts-nova-erro'));
+  limpar($('ts-conf-erro'));
+  $('ts-atual').value = '';
+  $('ts-nova').value = '';
+  $('ts-conf').value = '';
   const resp = await enviar({ type: 'GET_CONFIG' });
   if (!resp?.ok) return;
   const c = resp.rateLimit;
@@ -443,6 +450,45 @@ async function aoSalvarRateLimit(evento) {
     dizer(status, 'Configuração salva.');
   } else {
     dizer(status, 'Não foi possível salvar.');
+  }
+}
+
+async function aoTrocarSenha(evento) {
+  evento.preventDefault();
+  const novaErro = $('ts-nova-erro');
+  const confErro = $('ts-conf-erro');
+  const status = $('ts-status');
+  limpar(novaErro);
+  limpar(confErro);
+  limpar(status);
+
+  const senhaAtual = $('ts-atual').value;
+  const senhaNova = $('ts-nova').value;
+  const confirmacao = $('ts-conf').value;
+
+  if (senhaAtual === '') {
+    dizer(status, 'Informe a senha atual.');
+    return;
+  }
+  const validacao = validarCadastroSenha({ senha: senhaNova, confirmacao });
+  if (!validacao.valido) {
+    if (validacao.erros.senha) dizer(novaErro, validacao.erros.senha);
+    if (validacao.erros.confirmacao) dizer(confErro, validacao.erros.confirmacao);
+    return;
+  }
+
+  const resp = await enviar({ type: 'CHANGE_MASTER_PASSWORD', senhaAtual, senhaNova });
+  $('ts-atual').value = '';
+  $('ts-nova').value = '';
+  $('ts-conf').value = '';
+  if (resp?.ok) {
+    dizer(status, 'Senha alterada com sucesso.');
+  } else if (resp?.erro === 'SENHA_ATUAL_INCORRETA') {
+    dizer(status, 'Senha atual incorreta.');
+  } else if (resp?.erro === 'SENHA_NOVA_INVALIDA') {
+    dizer(novaErro, 'A nova senha não atende aos requisitos.');
+  } else {
+    dizer(status, 'Não foi possível trocar a senha.');
   }
 }
 
