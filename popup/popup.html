@@ -91,9 +91,51 @@
         <button class="btn" id="btn-adicionar" type="button">+ Adicionar novo</button>
 
         <div class="rodape">
+          <button class="btn-link" id="btn-config" type="button">Configurações</button>
           <button class="btn-link" id="btn-exportar" type="button">Exportar</button>
           <button class="btn-link" id="btn-importar" type="button">Importar</button>
         </div>
+      </section>
+
+      <!-- Configurações (task 16+) -->
+      <section id="view-config" class="view" hidden>
+        <div class="principal__topo">
+          <p class="view__desc">Configurações</p>
+          <button class="btn-link" id="config-voltar" type="button">Voltar</button>
+        </div>
+
+        <form id="form-ratelimit" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Proteção contra tentativas de senha</h2>
+          <p class="config__ajuda">
+            Atraso progressivo após erros consecutivos de senha mestra. Tempos em segundos.
+          </p>
+          <label class="field">
+            <span class="field__label">Tentativas sem atraso</span>
+            <input class="field__input" id="rl-livres" type="number" min="0" max="1000" />
+          </label>
+          <label class="field">
+            <span class="field__label">Tentativas até o 1º atraso</span>
+            <input class="field__input" id="rl-limite1" type="number" min="1" max="2000" />
+          </label>
+          <label class="field">
+            <span class="field__label">1º atraso (s)</span>
+            <input class="field__input" id="rl-atraso1" type="number" min="0" max="600" />
+          </label>
+          <label class="field">
+            <span class="field__label">Máximo de tentativas (até o 2º atraso)</span>
+            <input class="field__input" id="rl-limite2" type="number" min="2" max="5000" />
+          </label>
+          <label class="field">
+            <span class="field__label">2º atraso (s)</span>
+            <input class="field__input" id="rl-atraso2" type="number" min="0" max="600" />
+          </label>
+          <label class="field">
+            <span class="field__label">Atraso máximo (s)</span>
+            <input class="field__input" id="rl-atrasomax" type="number" min="0" max="600" />
+          </label>
+          <button class="btn" type="submit">Salvar proteção</button>
+          <p class="form__status" id="ratelimit-status" role="status"></p>
+        </form>
       </section>
 
       <!-- Exportar backup criptografado (task 14) -->

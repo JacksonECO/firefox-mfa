@@ -92,6 +92,7 @@ uma única funcionalidade.
 | 13 | [Design system visual](./13-design-system-visual.md) | Estilo arredondado, sóbrio e futurista |
 | 14 | [(Futuro) Exportar/Importar dados](./14-futuro-exportar-importar-dados.md) | Backup criptografado com senha própria |
 | 15 | [Autocópia de MFA único](./15-autocopiar-mfa-unico.md) | Copia o código ao abrir se houver 1 MFA do domínio; ordena ao listar todos |
+| 16 | [Tela de configurações + rate limit configurável](./16-tela-de-configuracoes.md) | Ajustes do atraso progressivo de senha mestra |
 
 ## Princípios que não devem ser violados em nenhuma task
 

@@ -19,6 +19,7 @@ const VIEWS = [
   'view-formulario',
   'view-exportar',
   'view-importar',
+  'view-config',
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -78,6 +79,10 @@ function ligarEventos() {
   $('importar-voltar').addEventListener('click', abrirPrincipal);
   $('form-exportar').addEventListener('submit', aoExportar);
   $('form-importar').addEventListener('submit', aoImportar);
+
+  $('btn-config').addEventListener('click', abrirConfig);
+  $('config-voltar').addEventListener('click', abrirPrincipal);
+  $('form-ratelimit').addEventListener('submit', aoSalvarRateLimit);
 
   $('form-mfa').addEventListener('submit', aoSalvarFormulario);
   $('form-voltar').addEventListener('click', abrirPrincipal);
@@ -393,6 +398,51 @@ async function aoImportar(evento) {
     dizer(erro, 'Sessão expirada.');
   } else {
     dizer(erro, 'Senha incorreta ou arquivo inválido.');
+  }
+}
+
+/* ------------------------------ configurações ------------------------------ */
+
+async function abrirConfig() {
+  mostrarVista('config');
+  limpar($('ratelimit-status'));
+  const resp = await enviar({ type: 'GET_CONFIG' });
+  if (!resp?.ok) return;
+  const c = resp.rateLimit;
+  $('rl-livres').value = c.livres;
+  $('rl-limite1').value = c.limite1;
+  $('rl-atraso1').value = Math.round(c.atraso1Ms / 1000);
+  $('rl-limite2').value = c.limite2;
+  $('rl-atraso2').value = Math.round(c.atraso2Ms / 1000);
+  $('rl-atrasomax').value = Math.round(c.atrasoMaxMs / 1000);
+}
+
+async function aoSalvarRateLimit(evento) {
+  evento.preventDefault();
+  const status = $('ratelimit-status');
+  limpar(status);
+  const seg = (id) => Number($(id).value) * 1000;
+  const config = {
+    livres: Number($('rl-livres').value),
+    limite1: Number($('rl-limite1').value),
+    atraso1Ms: seg('rl-atraso1'),
+    limite2: Number($('rl-limite2').value),
+    atraso2Ms: seg('rl-atraso2'),
+    atrasoMaxMs: seg('rl-atrasomax'),
+  };
+  const resp = await enviar({ type: 'SET_RATE_LIMIT', config });
+  if (resp?.ok) {
+    // Reaplica os valores normalizados (caso tenham sido ajustados).
+    const c = resp.rateLimit;
+    $('rl-livres').value = c.livres;
+    $('rl-limite1').value = c.limite1;
+    $('rl-atraso1').value = Math.round(c.atraso1Ms / 1000);
+    $('rl-limite2').value = c.limite2;
+    $('rl-atraso2').value = Math.round(c.atraso2Ms / 1000);
+    $('rl-atrasomax').value = Math.round(c.atrasoMaxMs / 1000);
+    dizer(status, 'Configuração salva.');
+  } else {
+    dizer(status, 'Não foi possível salvar.');
   }
 }
 

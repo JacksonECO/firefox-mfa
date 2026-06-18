@@ -226,6 +226,26 @@ body {
   border-top: 1px solid var(--color-border);
 }
 
+.config__bloco {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.config__titulo {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+}
+
+.config__ajuda {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+}
+
 /* Card */
 
 .card {

@@ -15,6 +15,7 @@ const CHAVE_MFAS = 'mfaItems';
 const CHAVE_SCHEMA = 'schemaVersion';
 const CHAVE_TENTATIVAS = 'mfaUnlockAttempts';
 const CHAVE_ULTIMA_TENTATIVA = 'mfaUnlockLastAttemptAt';
+const CHAVE_CONFIG_RATELIMIT = 'rateLimitConfig';
 const SCHEMA_ATUAL = 1;
 
 // Migrações de schema (task 11). Vazio hoje (só existe a v1). Cada migração
@@ -115,6 +116,19 @@ export async function salvarTentativas(n) {
 
 export async function resetarTentativas() {
   await area().set({ [CHAVE_TENTATIVAS]: 0 });
+}
+
+/* ------------------------ configurações (task 16) ------------------------ */
+
+/** Config (não sensível) do rate limiting, ou null se nunca salva. */
+export async function obterConfigRateLimit() {
+  const dados = await area().get(CHAVE_CONFIG_RATELIMIT);
+  const c = dados[CHAVE_CONFIG_RATELIMIT];
+  return c && typeof c === 'object' ? c : null;
+}
+
+export async function salvarConfigRateLimit(config) {
+  await area().set({ [CHAVE_CONFIG_RATELIMIT]: config });
 }
 
 /* -------------------------------- MFAs (task 03) ----------------------------- */
