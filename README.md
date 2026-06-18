@@ -11,70 +11,128 @@ O planejamento completo está em [`ia/`](./ia/) (começando por
 [`ia/00-resumo-do-projeto.md`](./ia/00-resumo-do-projeto.md)). As regras de segurança e design
 estão em [`CLAUDE.md`](./CLAUDE.md).
 
-> **Estado atual:** task 01 concluída — estrutura base da extensão carregável. As
-> funcionalidades (criptografia, cadastro, listagem, TOTP, etc.) chegam nas próximas tasks.
+> **Estado atual:** MVP funcionalmente completo (tasks 01–14). Senha mestra, cadastro,
+> listagem por domínio, geração de TOTP, copiar código, edição/exclusão, rate limiting,
+> versionamento de schema, hardening, design system e exportar/importar.
 
-## Estrutura
+## Como instalar (passo a passo)
+
+A extensão roda como **instalação temporária** no Firefox (não precisa de loja). Não há build
+step: o código é carregado direto.
+
+1. Abra o **Firefox** e digite na barra de endereço: `about:debugging#/runtime/this-firefox`
+2. Clique em **"Carregar extensão temporária…"**.
+3. Navegue até a pasta deste repositório e selecione o arquivo **`manifest.json`**.
+4. Pronto: o ícone do **Firefox MFA** aparece na barra de ferramentas. Se não aparecer, abra
+   o menu de extensões (ícone de peça de quebra-cabeça) e fixe-o.
+
+> A instalação temporária some ao **fechar o Firefox** — repita os passos a cada sessão. Se
+> editar o código, volte em `about:debugging` e clique em **"Recarregar"**.
+
+## Como usar (passo a passo)
+
+1. **Primeiro acesso — criar a senha mestra.** Clique no ícone da extensão. Defina uma senha
+   mestra (mínimo 8 caracteres) e confirme. Ela protege todos os seus códigos e **não pode ser
+   recuperada** se esquecida — guarde-a bem.
+2. **Cadastrar um MFA.** Na tela principal, clique em **"+ Adicionar novo"**. Preencha:
+   - **Nome** (obrigatório): ex. "GitHub".
+   - **Site (domínio)** (opcional): já vem pré-preenchido com o domínio da aba atual; pode
+     editar ou apagar.
+   - **Chave (segredo)** (obrigatório): a chave Base32 fornecida pelo serviço (o mesmo texto
+     que você usaria em outro app autenticador). Use **"Mostrar"** para conferir.
+
+   Clique em **"Salvar MFA"**.
+3. **Ver e copiar o código.** Na tela principal, cada card mostra o código de 6 dígitos e um
+   cronômetro (anel) com o tempo restante da janela de 30s. **Clique no código** para copiá-lo
+   para a área de transferência — aparece **"Copiado!"**. O código se atualiza sozinho ao
+   virar a janela.
+4. **Foco no domínio atual.** Ao abrir o popup em um site, só aparecem os MFAs daquele domínio.
+   Se não houver nenhum para o site, a lista completa aparece automaticamente. Use
+   **"Ver todos" / "Ver deste site"** para alternar.
+5. **Editar ou excluir.** Clique no ícone de lápis (✎) de um card para editar nome, domínio ou
+   segredo, ou para **excluir** (com confirmação).
+6. **Bloqueio automático.** Após **2 minutos** de inatividade a sessão expira e a senha mestra
+   é pedida de novo. Errar a senha repetidamente aplica um atraso progressivo (proteção contra
+   força bruta).
+7. **Backup (exportar / importar).** Na tela principal, em **"Exportar"**, defina uma senha de
+   exportação (independente da senha mestra) e baixe o arquivo `.json` criptografado. Para
+   restaurar (no mesmo Firefox ou em outro), use **"Importar"**, selecione o arquivo e informe
+   a senha de exportação.
+
+## Estrutura do projeto
 
 ```
-/manifest.json        manifest MV3
+/manifest.json        manifest MV3 (permissões mínimas + CSP explícita)
 /icons/               ícone da extensão (SVG)
-/popup/               UI do popup (popup.html, popup.css, popup.js)
-/src/                 background.js — dono de toda a crypto e segredo em claro
-/scripts/             empacotar.sh — gera o .zip de instalação
+/popup/               UI do popup
+    popup.html  popup.js  cards.js  theme.css (tokens)  popup.css
+/src/                 lógica (rodando no background quando toca cripto/segredo)
+    background.js   roteador de mensagens — dono da crypto e do segredo em claro
+    sessao.js       chave em memória + expiração de 2 min + rate limiting
+    crypto.js       PBKDF2 + AES-GCM (Web Crypto nativa)
+    storage.js      única camada que acessa browser.storage.local
+    totp.js         TOTP (RFC 6238) via HMAC-SHA1 nativo
+    dominio.js  base32.js  cadastro.js  senha.js  listagem.js  codigo.js
+    ratelimit.js  backup.js
+/tests/               testes (node:test, sem dependências)
+/scripts/             empacotar.sh — gera o .zip
 /ia/                  docs de planejamento (uma task por arquivo)
 ```
 
-## Como carregar a extensão (temporária) no Firefox
-
-1. Abra `about:debugging#/runtime/this-firefox` no Firefox.
-2. Clique em **"Carregar extensão temporária…"**.
-3. Selecione o arquivo `manifest.json` na raiz deste repositório.
-4. A extensão aparece na barra de ferramentas. Clicar no ícone abre o popup.
-
-A instalação temporária some ao fechar o Firefox — repita o processo a cada sessão de
-desenvolvimento. Mudanças nos arquivos exigem clicar em **"Recarregar"** na mesma tela.
-
-## Empacotar para distribuição/teste
+## Empacotar (gerar o .zip)
 
 ```bash
 ./scripts/empacotar.sh
 ```
 
-Gera `web-ext-artifacts/firefox-mfa.zip`. Requer o utilitário `zip` instalado
-(`sudo apt install zip` no Ubuntu).
-
-## Nota de plataforma (background MV3 no Firefox)
-
-O alvo obrigatório do MVP é **Ubuntu/Linux + Firefox**. No Firefox, o background de uma
-extensão MV3 roda como **event page** declarada em `background.scripts` (não-persistente),
-e não como `service_worker` ao estilo do Chrome. Por isso o `manifest.json` usa
-`background.scripts`. Os docs em `ia/` se referem ao background como "service worker" pelo
-papel que ele cumpre; o comportamento é equivalente. Para portar ao Chrome no futuro,
-trocar a chave por `background.service_worker` (ver task 14 / trabalho futuro).
+Gera `web-ext-artifacts/firefox-mfa.zip` com só os arquivos de runtime. Requer o utilitário
+`zip` (`sudo apt install zip` no Ubuntu).
 
 ## Testes
 
-Os testes rodam com o runner nativo do Node (sem dependências):
+Rodam com o runner nativo do Node, **sem nenhuma dependência**:
 
 ```bash
 npm test        # ou: node --test
 ```
 
-Cobrem a criptografia (PBKDF2/AES-GCM), a camada de storage e a sessão (timer de 2 min com
-fake timers). Requer Node 20+ (Web Crypto global e `mock.timers`).
+Cobrem criptografia (PBKDF2/AES-GCM), storage/CRUD, sessão (timer de 2 min com fake timers),
+TOTP (vetores oficiais do RFC 6238 Apêndice B), listagem por domínio, rate limiting, migração
+de schema, exportar/importar e uma auditoria estática de hardening. Requer **Node 20+**
+(Web Crypto global e `mock.timers`).
 
-## Permissões
+## Segurança
 
-O manifest pede `storage` (persistência local), `alarms` (expiração da sessão em 2 min, da
-task 02), `activeTab` (ler o domínio da aba ativa para pré-preencher o cadastro/filtrar a
-listagem, tasks 04 e 06) e `clipboardWrite` (copiar o código com um clique, task 08),
-seguindo o princípio de menor privilégio. A auditoria final de permissões e CSP está na
-task 12.
+- **Tudo local, sem rede.** Nenhum dado sai do navegador; não há telemetria nem CDN.
+- **Senha mestra nunca é salva.** Dela deriva-se (PBKDF2-SHA256, 600.000 iterações) uma chave
+  AES-GCM que vive **só em memória** do background e expira em 2 min de inatividade.
+- **Segredos sempre criptografados em repouso** (AES-GCM, IV aleatório por registro). Só são
+  decriptados em memória, no instante de gerar o código.
+- **CSP explícita** no manifest (`script-src 'self'; object-src 'self'`) e **permissões
+  mínimas** (veja abaixo).
+- **Zero dependências de terceiros.** Toda a criptografia usa a Web Crypto API nativa; o TOTP é
+  construído sobre o HMAC-SHA1 nativo — não há lib externa a vendorizar nem risco de
+  supply-chain.
+- **Isolamento de storage.** `browser.storage.local` é isolado por extensão no modelo de
+  segurança do WebExtensions — outra extensão instalada não acessa estes dados.
+- **Renderização segura.** `nome`/`dominio` (texto livre do usuário) são sempre inseridos via
+  `textContent`/DOM API, nunca `innerHTML` — sem XSS via dados armazenados.
 
-## Suporte de plataforma
+### Permissões do manifest
 
-O MVP tem suporte garantido em **Ubuntu/Linux + Firefox**. A cópia do código usa
-`navigator.clipboard.writeText` dentro do gesto de clique do usuário. Outros sistemas
-operacionais e navegadores são trabalho futuro (task 14), incluindo eventuais fallbacks de
-cópia manual.
+| Permissão        | Para quê                                                            |
+|------------------|---------------------------------------------------------------------|
+| `storage`        | Guardar (localmente) salt, valor de controle e MFAs criptografados. |
+| `alarms`         | Expirar a chave da sessão após 2 min de inatividade.                |
+| `activeTab`      | Ler **apenas** o domínio da aba ativa (pré-preencher/filtrar).      |
+| `clipboardWrite` | Copiar o código de 6 dígitos ao clicar.                             |
+
+Nenhuma permissão ampla (`tabs` genérica, `<all_urls>`, `http://*/*`).
+
+## Nota de plataforma
+
+O alvo garantido do MVP é **Ubuntu/Linux + Firefox**. No Firefox, o background de uma extensão
+MV3 roda como **event page** (`background.scripts`, não-persistente), não como `service_worker`
+ao estilo do Chrome — por isso o `manifest.json` usa `background.scripts`. Os docs em `ia/` se
+referem ao background como "service worker" pelo papel que ele cumpre; o comportamento é
+equivalente. Outros sistemas operacionais/navegadores são trabalho futuro.
