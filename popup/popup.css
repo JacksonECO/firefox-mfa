@@ -69,6 +69,12 @@ body {
   color: var(--color-danger-text);
 }
 
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .field__input {
   width: 100%;
   padding: var(--space-2) var(--space-3);

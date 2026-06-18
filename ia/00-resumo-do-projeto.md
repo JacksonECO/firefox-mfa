@@ -94,6 +94,7 @@ uma única funcionalidade.
 | 15 | [Autocópia de MFA único](./15-autocopiar-mfa-unico.md) | Copia o código ao abrir se houver 1 MFA do domínio; ordena ao listar todos |
 | 16 | [Tela de configurações + rate limit configurável](./16-tela-de-configuracoes.md) | Ajustes do atraso progressivo de senha mestra |
 | 17 | [Trocar a senha mestra](./17-trocar-senha-mestra.md) | Re-deriva a chave e recriptografa todos os segredos |
+| 18 | [Autopreenchimento na página](./18-autopreenchimento-na-pagina.md) | Insere o código no campo do site (opt-in, via seletor) |
 
 ## Princípios que não devem ser violados em nenhuma task
 

@@ -16,6 +16,7 @@ const CHAVE_SCHEMA = 'schemaVersion';
 const CHAVE_TENTATIVAS = 'mfaUnlockAttempts';
 const CHAVE_ULTIMA_TENTATIVA = 'mfaUnlockLastAttemptAt';
 const CHAVE_CONFIG_RATELIMIT = 'rateLimitConfig';
+const CHAVE_CONFIG_AUTOFILL = 'autofillConfig';
 const SCHEMA_ATUAL = 1;
 
 // Migrações de schema (task 11). Vazio hoje (só existe a v1). Cada migração
@@ -129,6 +130,17 @@ export async function obterConfigRateLimit() {
 
 export async function salvarConfigRateLimit(config) {
   await area().set({ [CHAVE_CONFIG_RATELIMIT]: config });
+}
+
+/** Config (não sensível) do autopreenchimento, ou null se nunca salva. */
+export async function obterConfigAutofill() {
+  const dados = await area().get(CHAVE_CONFIG_AUTOFILL);
+  const c = dados[CHAVE_CONFIG_AUTOFILL];
+  return c && typeof c === 'object' ? c : null;
+}
+
+export async function salvarConfigAutofill(config) {
+  await area().set({ [CHAVE_CONFIG_AUTOFILL]: config });
 }
 
 /* -------------------------------- MFAs (task 03) ----------------------------- */

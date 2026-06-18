@@ -14,6 +14,7 @@ import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
 import { exportarDados, importarDados } from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
+import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
 
 /** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
 function metadados(mfa) {
@@ -217,7 +218,10 @@ export async function rotear(mensagem) {
       const rateLimit = normalizarConfigRateLimit(
         (await storage.obterConfigRateLimit()) ?? RATE_LIMIT_PADRAO,
       );
-      return { ok: true, rateLimit };
+      const autofill = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      return { ok: true, rateLimit, autofill };
     }
 
     case 'SET_RATE_LIMIT': {
@@ -226,6 +230,14 @@ export async function rotear(mensagem) {
       const config = normalizarConfigRateLimit(mensagem.config ?? {});
       await storage.salvarConfigRateLimit(config);
       return { ok: true, rateLimit: config };
+    }
+
+    case 'SET_AUTOFILL': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const config = normalizarConfigAutofill(mensagem.config ?? {});
+      await storage.salvarConfigAutofill(config);
+      return { ok: true, autofill: config };
     }
 
     case 'CHANGE_MASTER_PASSWORD': {

@@ -45,7 +45,8 @@ step: o código é carregado direto.
 3. **Ver e copiar o código.** Na tela principal, cada card mostra o código de 6 dígitos e um
    cronômetro (anel) com o tempo restante da janela de 30s. **Clique no código** para copiá-lo
    para a área de transferência — aparece **"Copiado!"**. O código se atualiza sozinho ao
-   virar a janela.
+   virar a janela. Se houver **só 1 MFA** para o site, ao abrir o popup o código já é copiado
+   automaticamente.
 4. **Foco no domínio atual.** Ao abrir o popup em um site, só aparecem os MFAs daquele domínio.
    Se não houver nenhum para o site, a lista completa aparece automaticamente. Use
    **"Ver todos" / "Ver deste site"** para alternar.
@@ -58,6 +59,10 @@ step: o código é carregado direto.
    exportação (independente da senha mestra) e baixe o arquivo `.json` criptografado. Para
    restaurar (no mesmo Firefox ou em outro), use **"Importar"**, selecione o arquivo e informe
    a senha de exportação.
+8. **Configurações.** Em **"Configurações"** (rodapé da tela principal) você pode: ajustar a
+   proteção contra tentativas de senha (atrasos), **trocar a senha mestra** (recriptografa
+   tudo) e habilitar o **autopreenchimento** — informando um seletor CSS do campo de código do
+   site para que, com 1 MFA, o código seja inserido e enviado automaticamente.
 
 ## Estrutura do projeto
 
@@ -124,8 +129,9 @@ de schema, exportar/importar e uma auditoria estática de hardening. Requer **No
 |------------------|---------------------------------------------------------------------|
 | `storage`        | Guardar (localmente) salt, valor de controle e MFAs criptografados. |
 | `alarms`         | Expirar a chave da sessão após 2 min de inatividade.                |
-| `activeTab`      | Ler **apenas** o domínio da aba ativa (pré-preencher/filtrar).      |
-| `clipboardWrite` | Copiar o código de 6 dígitos ao clicar.                             |
+| `activeTab`      | Ler **apenas** o domínio da aba ativa (pré-preencher/filtrar) e injetar o código no autopreenchimento. |
+| `clipboardWrite` | Copiar o código de 6 dígitos (clique ou autocópia).                |
+| `scripting`      | Autopreenchimento opt-in: inserir o código (nunca o segredo) no campo da página. |
 
 Nenhuma permissão ampla (`tabs` genérica, `<all_urls>`, `http://*/*`).
 

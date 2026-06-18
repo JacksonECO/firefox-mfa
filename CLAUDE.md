@@ -78,8 +78,10 @@ nenhuma task** — uma mudança que comprometa qualquer uma delas está errada:
 9. **Sem logs de segredo.** Nunca `console.log` de senha mestra, chave ou segredo em claro —
    nem em desenvolvimento. Sem telemetria.
 10. **Menor privilégio.** `permissions` do manifest é exatamente `storage`, `activeTab`,
-    `clipboardWrite`, `alarms`. Nada de `tabs` genérica, `<all_urls>` ou `http://*/*`. CSP
-    explícita (`script-src 'self'; object-src 'self'`).
+    `clipboardWrite`, `alarms` e `scripting` (este último só para o autopreenchimento opt-in da
+    task 18, que injeta o código de 6 dígitos — nunca o segredo — na aba ativa via `activeTab`).
+    Nada de `tabs` genérica, `<all_urls>` ou `http://*/*`. CSP explícita
+    (`script-src 'self'; object-src 'self'`).
 
 ## Regras de design (UI)
 
