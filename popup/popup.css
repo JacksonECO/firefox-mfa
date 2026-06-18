@@ -1,8 +1,7 @@
 /*
- * Estilo mínimo do placeholder (task 01).
- * O design system completo — tokens centralizados em theme.css, paleta,
- * espaçamentos e estados — é definido na task 13. Aqui só o essencial para
- * o popup não aparecer "quebrado" ao carregar a extensão.
+ * Estilo do popup (tasks 01 e 04). Sóbrio e arredondado; o design system
+ * completo (tokens centralizados em theme.css, paleta, estados) é a task 13.
+ * Aqui só o necessário para o cadastro funcionar com aparência limpa.
  */
 
 * {
@@ -12,7 +11,8 @@
 body {
   margin: 0;
   width: 320px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
   background: #10131c;
   color: #eef2ff;
 }
@@ -24,6 +24,7 @@ body {
 .app__header {
   display: flex;
   align-items: center;
+  margin-bottom: 12px;
 }
 
 .app__title {
@@ -33,11 +34,109 @@ body {
   letter-spacing: 0.2px;
 }
 
-.app__hint {
-  margin: 12px 0 0;
+.view__desc {
+  margin: 0 0 12px;
   font-size: 13px;
-  line-height: 1.4;
   color: #9aa3b8;
+}
+
+/* Formulários */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.field__label {
+  font-size: 12px;
+  color: #9aa3b8;
+}
+
+.field__req {
+  color: #f0727d;
+}
+
+.field__input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: inherit;
+  background: #1a1f2e;
+  border: 1px solid #2a3142;
+  border-radius: 8px;
+  outline: none;
+}
+
+.field__input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+}
+
+.field__secret {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field__secret .field__input {
+  flex: 1;
+}
+
+.field__erro {
+  margin: 0 0 8px;
+  min-height: 1em;
+  font-size: 12px;
+  color: #f0727d;
+}
+
+.btn {
+  margin-top: 4px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: #6366f1;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.btn:hover {
+  background: #5457e5;
+}
+
+.btn:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 2px;
+}
+
+.btn-link {
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #a5b4fc;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.form__status {
+  margin: 8px 0 0;
+  min-height: 1em;
+  font-size: 13px;
+  color: #4ade80;
 }
 
 @media (prefers-color-scheme: light) {
@@ -45,7 +144,15 @@ body {
     background: #f5f6fa;
     color: #1b1f2a;
   }
-  .app__hint {
+  .view__desc,
+  .field__label {
     color: #5b6273;
+  }
+  .field__input {
+    background: #fff;
+    border-color: #d4d8e2;
+  }
+  .form__status {
+    color: #15803d;
   }
 }

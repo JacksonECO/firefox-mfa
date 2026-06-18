@@ -66,7 +66,7 @@ fake timers). Requer Node 20+ (Web Crypto global e `mock.timers`).
 
 ## Permissões
 
-O manifest pede `storage` (persistência local) e `alarms` (expiração da sessão em 2 min, da
-task 02). As demais (`activeTab`, `clipboardWrite`) entram nas tasks que de fato as usam
-(04 e 08), seguindo o princípio de menor privilégio. A auditoria final de permissões e CSP
-está na task 12.
+O manifest pede `storage` (persistência local), `alarms` (expiração da sessão em 2 min, da
+task 02) e `activeTab` (ler o domínio da aba ativa para pré-preencher o cadastro, task 04).
+A permissão `clipboardWrite` entra na task 08 (copiar o código), seguindo o princípio de
+menor privilégio. A auditoria final de permissões e CSP está na task 12.

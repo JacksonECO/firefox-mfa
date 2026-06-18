@@ -15,7 +15,8 @@
   },
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "activeTab"
   ],
   "action": {
     "default_title": "Firefox MFA",
