@@ -13,6 +13,7 @@ import * as cripto from './crypto.js';
 import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
 import { exportarDados, importarDados } from './backup.js';
+import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
 
 /** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
 function metadados(mfa) {
@@ -209,6 +210,22 @@ export async function rotear(mensagem) {
       } catch {
         return { ok: false, erro: 'SENHA_OU_ARQUIVO_INVALIDO' };
       }
+    }
+
+    case 'GET_CONFIG': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const rateLimit = normalizarConfigRateLimit(
+        (await storage.obterConfigRateLimit()) ?? RATE_LIMIT_PADRAO,
+      );
+      return { ok: true, rateLimit };
+    }
+
+    case 'SET_RATE_LIMIT': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const config = normalizarConfigRateLimit(mensagem.config ?? {});
+      await storage.salvarConfigRateLimit(config);
+      return { ok: true, rateLimit: config };
     }
 
     default:

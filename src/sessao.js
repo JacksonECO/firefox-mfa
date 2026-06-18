@@ -7,7 +7,7 @@
 
 import * as cripto from './crypto.js';
 import * as storage from './storage.js';
-import { calcularAtraso } from './ratelimit.js';
+import { calcularAtraso, normalizarConfigRateLimit } from './ratelimit.js';
 
 const TIMEOUT_MS = 2 * 60 * 1000; // expira após 2 min de inatividade
 const NOME_ALARME = 'firefox-mfa-expiracao-sessao';
@@ -69,7 +69,8 @@ export async function desbloquear(senha, { esperar = esperaReal } = {}) {
   if (!salt || !controle) return false; // ainda não inicializado
 
   const tentativas = await storage.obterTentativas();
-  await esperar(calcularAtraso(tentativas));
+  const config = normalizarConfigRateLimit((await storage.obterConfigRateLimit()) ?? {});
+  await esperar(calcularAtraso(tentativas, config));
 
   const chave = await cripto.derivarChave(senha, salt);
   try {
