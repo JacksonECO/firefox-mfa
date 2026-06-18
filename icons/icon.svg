@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Firefox MFA">
+  <defs>
+    <clipPath id="rounded">
+      <rect x="0" y="0" width="128" height="128" rx="28" ry="28"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#rounded)">
+    <rect x="0" y="0" width="128" height="128" fill="#10131c"/>
+    <path d="M64 18 L102 33 V63 C102 89 86 105 64 113 C42 105 26 89 26 63 V33 Z"
+          fill="#6366f1"/>
+    <circle cx="64" cy="60" r="11" fill="#eef2ff"/>
+    <path d="M60 60 H68 L66 84 H62 Z" fill="#eef2ff"/>
+  </g>
+</svg>
