@@ -10,6 +10,7 @@ import { extrairDominioDaAba } from '../src/dominio.js';
 import { validarCadastro } from '../src/cadastro.js';
 import { validarCadastroSenha, decidirTela } from '../src/senha.js';
 import { decidirListagem, filtrarPorDominio } from '../src/listagem.js';
+import { codigoParaCopia } from '../src/codigo.js';
 import { renderizarLista, pararTicker, copiarParaClipboard } from './cards.js';
 
 const VIEWS = [
@@ -84,6 +85,7 @@ function ligarEventos() {
   $('config-voltar').addEventListener('click', abrirPrincipal);
   $('form-ratelimit').addEventListener('submit', aoSalvarRateLimit);
   $('form-trocar-senha').addEventListener('submit', aoTrocarSenha);
+  $('form-autofill').addEventListener('submit', aoSalvarAutofill);
 
   $('form-mfa').addEventListener('submit', aoSalvarFormulario);
   $('form-voltar').addEventListener('click', abrirPrincipal);
@@ -172,16 +174,82 @@ async function abrirPrincipal({ autoCopiar = false } = {}) {
   if (autoCopiar) await autocopiarSeUnico(decisao);
 }
 
-// Autocópia (task 15): só na abertura do popup e só com 1 MFA do domínio.
+// Autocópia (task 15) + autopreenchimento (task 18): só na abertura do popup e
+// só com 1 MFA do domínio.
 async function autocopiarSeUnico(decisao) {
   if (decisao.modo !== 'dominio' || decisao.itens.length !== 1) return;
   const resp = await enviar({ type: 'GET_CODE', id: decisao.itens[0].id });
   if (!resp?.ok) return;
+  let copiou = false;
   try {
     await copiarParaClipboard(resp.codigo);
-    dizer($('principal-aviso'), 'Código copiado automaticamente ✓');
+    copiou = true;
   } catch {
     /* clipboard indisponível: silencioso, o usuário ainda pode clicar */
+  }
+  const preencheu = await preencherNaAba(resp.codigo);
+  if (preencheu) dizer($('principal-aviso'), 'Código copiado e preenchido na página ✓');
+  else if (copiou) dizer($('principal-aviso'), 'Código copiado automaticamente ✓');
+}
+
+// Função INJETADA na página (roda no contexto da aba, não no popup). Precisa ser
+// autocontida — sem closures/imports. Insere o código no(s) campo(s) do seletor
+// e tenta disparar Enter para continuar.
+function preencherCamposOtp(seletor, codigo) {
+  let campos;
+  try {
+    campos = document.querySelectorAll(seletor);
+  } catch {
+    return { ok: false, motivo: 'seletor' };
+  }
+  if (!campos || campos.length === 0) return { ok: false, motivo: 'nao_encontrado' };
+
+  const disparar = (el) => {
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  // Vários inputs (um por dígito) vs. um único campo.
+  if (campos.length > 1 && campos.length >= codigo.length) {
+    for (let i = 0; i < codigo.length; i++) {
+      campos[i].value = codigo[i];
+      disparar(campos[i]);
+    }
+  } else {
+    campos[0].value = codigo;
+    disparar(campos[0]);
+  }
+
+  const ultimo = campos[Math.min(campos.length, codigo.length) - 1] || campos[0];
+  ultimo.focus();
+  for (const tipo of ['keydown', 'keypress', 'keyup']) {
+    ultimo.dispatchEvent(
+      new KeyboardEvent(tipo, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }),
+    );
+  }
+  return { ok: true };
+}
+
+/** Injeta o código na aba ativa, se o autopreenchimento estiver habilitado. */
+async function preencherNaAba(codigo) {
+  let cfg;
+  try {
+    cfg = (await enviar({ type: 'GET_CONFIG' }))?.autofill;
+  } catch {
+    return false;
+  }
+  if (!cfg?.habilitado || !cfg.seletor || !browser.scripting?.executeScript) return false;
+  try {
+    const [aba] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!aba?.id) return false;
+    const [res] = await browser.scripting.executeScript({
+      target: { tabId: aba.id },
+      func: preencherCamposOtp,
+      args: [cfg.seletor, codigoParaCopia(codigo)],
+    });
+    return res?.result?.ok === true;
+  } catch {
+    return false; // sem permissão na aba / página restrita: silencioso
   }
 }
 
@@ -413,6 +481,7 @@ async function abrirConfig() {
   $('ts-atual').value = '';
   $('ts-nova').value = '';
   $('ts-conf').value = '';
+  limpar($('af-status'));
   const resp = await enviar({ type: 'GET_CONFIG' });
   if (!resp?.ok) return;
   const c = resp.rateLimit;
@@ -422,6 +491,27 @@ async function abrirConfig() {
   $('rl-limite2').value = c.limite2;
   $('rl-atraso2').value = Math.round(c.atraso2Ms / 1000);
   $('rl-atrasomax').value = Math.round(c.atrasoMaxMs / 1000);
+
+  const af = resp.autofill ?? {};
+  $('af-habilitado').checked = Boolean(af.habilitado);
+  $('af-seletor').value = af.seletor ?? '';
+}
+
+async function aoSalvarAutofill(evento) {
+  evento.preventDefault();
+  const status = $('af-status');
+  limpar(status);
+  const config = {
+    habilitado: $('af-habilitado').checked,
+    seletor: $('af-seletor').value,
+  };
+  const resp = await enviar({ type: 'SET_AUTOFILL', config });
+  if (resp?.ok) {
+    $('af-seletor').value = resp.autofill.seletor; // mostra o seletor normalizado
+    dizer(status, 'Autopreenchimento salvo.');
+  } else {
+    dizer(status, 'Não foi possível salvar.');
+  }
 }
 
 async function aoSalvarRateLimit(evento) {

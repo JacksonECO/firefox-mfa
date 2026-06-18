@@ -24,7 +24,7 @@ test('manifest: permissões exatamente as esperadas (menor privilégio)', () => 
   const manifest = JSON.parse(readFileSync(join(RAIZ, 'manifest.json'), 'utf8'));
   assert.deepEqual(
     [...manifest.permissions].sort(),
-    ['activeTab', 'alarms', 'clipboardWrite', 'storage'],
+    ['activeTab', 'alarms', 'clipboardWrite', 'scripting', 'storage'],
   );
 });
 

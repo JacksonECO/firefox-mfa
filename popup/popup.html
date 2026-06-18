@@ -159,6 +159,30 @@
           <button class="btn" type="submit">Trocar senha</button>
           <p class="form__status" id="ts-status" role="status"></p>
         </form>
+
+        <form id="form-autofill" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Autopreenchimento na página</h2>
+          <p class="config__ajuda">
+            Quando houver só 1 MFA para o site, insere o código no campo indicado e tenta
+            confirmar com Enter. Só o código (nunca o segredo) é inserido na página.
+          </p>
+          <label class="field field--inline">
+            <input id="af-habilitado" type="checkbox" />
+            <span class="field__label">Habilitar autopreenchimento</span>
+          </label>
+          <label class="field">
+            <span class="field__label">Seletor CSS do(s) campo(s) de código</span>
+            <input
+              class="field__input"
+              id="af-seletor"
+              type="text"
+              spellcheck="false"
+              placeholder="input[autocomplete=&quot;one-time-code&quot;]"
+            />
+          </label>
+          <button class="btn" type="submit">Salvar autopreenchimento</button>
+          <p class="form__status" id="af-status" role="status"></p>
+        </form>
       </section>
 
       <!-- Exportar backup criptografado (task 14) -->
