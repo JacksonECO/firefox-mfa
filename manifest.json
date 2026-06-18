@@ -14,7 +14,8 @@
     "96": "icons/icon.svg"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
   "action": {
     "default_title": "Firefox MFA",
