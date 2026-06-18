@@ -8,20 +8,34 @@
 // para que o worker consiga "acordar" ao receber uma mensagem/alarme.
 
 import * as sessao from './sessao.js';
+import * as storage from './storage.js';
+import { validarCadastro } from './cadastro.js';
+
+/** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
+function metadados(mfa) {
+  return {
+    id: mfa.id,
+    nome: mfa.nome,
+    dominio: mfa.dominio,
+    createdAt: mfa.createdAt,
+    updatedAt: mfa.updatedAt,
+  };
+}
 
 /**
  * Roteia uma mensagem vinda do popup. Retorna sempre um objeto serializável —
  * nunca a CryptoKey nem um segredo em claro.
  *
- * Tipos implementados nesta task (02):
- *  - IS_INITIALIZED      → { inicializado }
- *  - SET_MASTER_PASSWORD → { ok, erro? }   (primeiro acesso)
- *  - UNLOCK              → { ok }
- *  - LOCK               → { ok }
- *  - SESSION_STATUS     → { desbloqueado }
+ * Tipos implementados até aqui:
+ *  - IS_INITIALIZED      → { inicializado }                     (task 02)
+ *  - SET_MASTER_PASSWORD → { ok, erro? }   (primeiro acesso)    (task 02)
+ *  - UNLOCK              → { ok }                                (task 02)
+ *  - LOCK               → { ok }                                (task 02)
+ *  - SESSION_STATUS     → { desbloqueado }                      (task 02)
+ *  - SAVE_MFA           → { ok, mfa? , erro?/erros? }           (task 04)
  *
- * Tipos LIST_MFAS / GET_CODE / SAVE_MFA / REVEAL_SECRET chegam nas tasks
- * seguintes (03, 07, 09), que dependem do storage de MFAs e do TOTP.
+ * Tipos LIST_MFAS / GET_CODE / REVEAL_SECRET chegam nas tasks seguintes
+ * (06, 07, 09).
  */
 export async function rotear(mensagem) {
   switch (mensagem?.type) {
@@ -45,6 +59,31 @@ export async function rotear(mensagem) {
 
     case 'SESSION_STATUS':
       return { desbloqueado: sessao.estaDesbloqueado() };
+
+    case 'SAVE_MFA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      // Defesa em profundidade: revalida no background, sem confiar no popup.
+      const validacao = validarCadastro({
+        nome: mensagem.nome,
+        dominio: mensagem.dominio,
+        secret: mensagem.secret,
+      });
+      if (!validacao.valido) return { ok: false, erros: validacao.erros };
+      try {
+        const registro = await storage.salvarMfa(
+          {
+            nome: validacao.normalizado.nome,
+            dominio: validacao.normalizado.dominio,
+            secretEmClaro: validacao.normalizado.secret,
+          },
+          chave,
+        );
+        return { ok: true, mfa: metadados(registro) };
+      } catch (erro) {
+        return { ok: false, erro: erro.message };
+      }
+    }
 
     default:
       return { ok: false, erro: `Mensagem desconhecida: ${mensagem?.type}` };

@@ -11,7 +11,91 @@
       <header class="app__header">
         <h1 class="app__title">Firefox MFA</h1>
       </header>
-      <p class="app__hint">Estrutura base carregada. As funcionalidades chegam nas próximas tasks.</p>
+
+      <!-- Primeiro acesso: criar senha mestra (versão simplificada; a task 05 amplia) -->
+      <section id="view-criar-senha" class="view" hidden>
+        <p class="view__desc">Defina uma senha mestra para proteger seus códigos.</p>
+        <form id="form-criar-senha" class="form" novalidate>
+          <label class="field">
+            <span class="field__label">Senha mestra</span>
+            <input
+              class="field__input"
+              id="criar-senha-input"
+              type="password"
+              autocomplete="new-password"
+            />
+          </label>
+          <p class="field__erro" id="criar-senha-erro" role="alert"></p>
+          <button class="btn" type="submit">Criar senha e continuar</button>
+        </form>
+      </section>
+
+      <!-- Desbloqueio (versão simplificada; a task 05 amplia) -->
+      <section id="view-desbloquear" class="view" hidden>
+        <p class="view__desc">Digite sua senha mestra para desbloquear.</p>
+        <form id="form-desbloquear" class="form" novalidate>
+          <label class="field">
+            <span class="field__label">Senha mestra</span>
+            <input
+              class="field__input"
+              id="desbloquear-input"
+              type="password"
+              autocomplete="current-password"
+            />
+          </label>
+          <p class="field__erro" id="desbloquear-erro" role="alert"></p>
+          <button class="btn" type="submit">Desbloquear</button>
+        </form>
+      </section>
+
+      <!-- Cadastro de novo MFA -->
+      <section id="view-cadastro" class="view" hidden>
+        <p class="view__desc">Cadastrar novo MFA</p>
+        <form id="form-cadastro" class="form" novalidate>
+          <label class="field">
+            <span class="field__label">Nome <span class="field__req">*</span></span>
+            <input class="field__input" id="cadastro-nome" type="text" maxlength="100" />
+          </label>
+          <p class="field__erro" id="cadastro-nome-erro" role="alert"></p>
+
+          <label class="field">
+            <span class="field__label">Site (domínio)</span>
+            <input
+              class="field__input"
+              id="cadastro-dominio"
+              type="text"
+              maxlength="255"
+              placeholder="ex: github.com"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field__label">Chave (segredo) <span class="field__req">*</span></span>
+            <span class="field__secret">
+              <input
+                class="field__input"
+                id="cadastro-secret"
+                type="password"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+              <button
+                class="btn-link"
+                id="cadastro-secret-toggle"
+                type="button"
+                aria-label="Mostrar ou ocultar a chave"
+              >
+                Mostrar
+              </button>
+            </span>
+          </label>
+          <p class="field__erro" id="cadastro-secret-erro" role="alert"></p>
+
+          <button class="btn" type="submit">Salvar MFA</button>
+          <p class="form__status" id="cadastro-status" role="status"></p>
+        </form>
+      </section>
     </main>
     <script type="module" src="popup.js"></script>
   </body>
