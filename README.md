@@ -53,8 +53,20 @@ e não como `service_worker` ao estilo do Chrome. Por isso o `manifest.json` usa
 papel que ele cumpre; o comportamento é equivalente. Para portar ao Chrome no futuro,
 trocar a chave por `background.service_worker` (ver task 14 / trabalho futuro).
 
+## Testes
+
+Os testes rodam com o runner nativo do Node (sem dependências):
+
+```bash
+npm test        # ou: node --test
+```
+
+Cobrem a criptografia (PBKDF2/AES-GCM), a camada de storage e a sessão (timer de 2 min com
+fake timers). Requer Node 20+ (Web Crypto global e `mock.timers`).
+
 ## Permissões
 
-No momento o manifest pede apenas `storage`. As demais (`activeTab`, `clipboardWrite`,
-`alarms`) entram nas tasks que de fato as usam (04, 08, 02), seguindo o princípio de menor
-privilégio. A auditoria final de permissões e CSP está na task 12.
+O manifest pede `storage` (persistência local) e `alarms` (expiração da sessão em 2 min, da
+task 02). As demais (`activeTab`, `clipboardWrite`) entram nas tasks que de fato as usam
+(04 e 08), seguindo o princípio de menor privilégio. A auditoria final de permissões e CSP
+está na task 12.
