@@ -1,0 +1,46 @@
+# Dependências
+node_modules/
+.pnp/
+.pnp.js
+
+# Artefatos de empacotamento da extensão
+*.zip
+*.xpi
+/web-ext-artifacts/
+/dist/
+/build/
+
+# Logs e diagnósticos
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cobertura e cache de testes
+/coverage/
+.nyc_output/
+.cache/
+
+# Variáveis de ambiente e segredos (nunca versionar)
+.env
+.env.*
+*.local
+
+# Configurações de assinatura da extensão (AMO)
+.web-extension-id
+*.pem
+
+# Arquivos de editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Arquivos de sistema operacional
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
