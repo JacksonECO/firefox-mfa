@@ -228,6 +228,11 @@ export async function rotear(mensagem) {
       return { ok: true, rateLimit: config };
     }
 
+    case 'CHANGE_MASTER_PASSWORD': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      return sessao.trocarSenhaMestra(mensagem.senhaAtual, mensagem.senhaNova);
+    }
+
     default:
       return { ok: false, erro: `Mensagem desconhecida: ${mensagem?.type}` };
   }
