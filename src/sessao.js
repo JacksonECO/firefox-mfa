@@ -7,9 +7,13 @@
 
 import * as cripto from './crypto.js';
 import * as storage from './storage.js';
+import { calcularAtraso } from './ratelimit.js';
 
 const TIMEOUT_MS = 2 * 60 * 1000; // expira após 2 min de inatividade
 const NOME_ALARME = 'firefox-mfa-expiracao-sessao';
+
+/** Espera real (sobreponível nos testes para não atrasar de verdade). */
+const esperaReal = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 
 // Estado em memória do worker. Some se o worker for descarregado/reiniciado —
 // comportamento aceitável e até desejável (equivale a expirar a sessão).
@@ -48,19 +52,33 @@ export async function definirSenhaMestra(senha) {
  * EXCLUSIVAMENTE pelo sucesso/falha do decrypt do valor de controle (a tag
  * AES-GCM é verificada em tempo constante pelo navegador). Sem comparação
  * manual de strings — isso reintroduziria risco de timing attack.
+ *
+ * Rate limiting (task 10): antes de processar, aplica um atraso progressivo em
+ * função das tentativas erradas consecutivas (contador persistido). Acerto
+ * zera o contador; erro o incrementa. Toda a lógica vive aqui no background.
+ *
+ * @param {string} senha
+ * @param {{esperar?: (ms:number)=>Promise<void>}} [opcoes] `esperar` é
+ *   sobreponível nos testes para não atrasar de verdade.
  * @returns {Promise<boolean>} true se a senha estava correta.
  */
-export async function desbloquear(senha) {
+export async function desbloquear(senha, { esperar = esperaReal } = {}) {
   if (typeof senha !== 'string' || senha.length === 0) return false;
   const salt = await storage.obterSalt();
   const controle = await storage.obterValorControle();
   if (!salt || !controle) return false; // ainda não inicializado
+
+  const tentativas = await storage.obterTentativas();
+  await esperar(calcularAtraso(tentativas));
+
   const chave = await cripto.derivarChave(senha, salt);
   try {
     await cripto.descriptografar(controle.ciphertext, controle.iv, chave);
   } catch {
-    return false; // senha incorreta (falha de autenticação do AES-GCM)
+    await storage.salvarTentativas(tentativas + 1); // senha incorreta
+    return false;
   }
+  await storage.resetarTentativas(); // acerto: zera a fricção
   ativarSessao(chave);
   return true;
 }

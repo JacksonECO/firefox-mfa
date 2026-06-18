@@ -12,6 +12,7 @@ import * as storage from './storage.js';
 import * as cripto from './crypto.js';
 import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
+import { exportarDados, importarDados } from './backup.js';
 
 /** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
 function metadados(mfa) {
@@ -40,6 +41,8 @@ function metadados(mfa) {
  *  - REVEAL_SECRET      → { ok, secret } (exceção do fluxo de edição) (task 09)
  *  - UPDATE_MFA         → { ok, mfa? , erro?/erros? }           (task 09)
  *  - DELETE_MFA         → { ok, removidos }                     (task 09)
+ *  - EXPORT_DATA        → { ok, arquivo }                       (task 14)
+ *  - IMPORT_DATA        → { ok, importados }                    (task 14)
  */
 export async function rotear(mensagem) {
   switch (mensagem?.type) {
@@ -167,6 +170,47 @@ export async function rotear(mensagem) {
       return { ok: true, removidos };
     }
 
+    case 'EXPORT_DATA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      if (!mensagem.senha) return { ok: false, erro: 'SENHA_OBRIGATORIA' };
+      try {
+        // Descriptografa cada segredo localmente e reembala no arquivo, que é
+        // criptografado com a senha de exportação. Nada em claro vai ao arquivo.
+        const todos = await storage.listarMfas();
+        const registros = [];
+        for (const mfa of todos) {
+          const secret = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
+          registros.push({ nome: mfa.nome, dominio: mfa.dominio, secret });
+        }
+        const arquivo = await exportarDados(registros, mensagem.senha);
+        return { ok: true, arquivo };
+      } catch (erro) {
+        return { ok: false, erro: erro.message };
+      }
+    }
+
+    case 'IMPORT_DATA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      try {
+        const registros = await importarDados(mensagem.arquivo, mensagem.senha);
+        // Re-criptografa cada registro com a chave local e acrescenta ao cofre.
+        let importados = 0;
+        for (const reg of registros) {
+          if (!reg?.nome || !reg?.secret) continue;
+          await storage.salvarMfa(
+            { nome: reg.nome, dominio: reg.dominio ?? null, secretEmClaro: reg.secret },
+            chave,
+          );
+          importados += 1;
+        }
+        return { ok: true, importados };
+      } catch {
+        return { ok: false, erro: 'SENHA_OU_ARQUIVO_INVALIDO' };
+      }
+    }
+
     default:
       return { ok: false, erro: `Mensagem desconhecida: ${mensagem?.type}` };
   }
@@ -179,3 +223,9 @@ globalThis.browser?.runtime?.onMessage.addListener((mensagem) => rotear(mensagem
 globalThis.browser?.alarms?.onAlarm.addListener((alarme) => {
   if (alarme.name === sessao.NOME_ALARME) sessao.bloquear();
 });
+
+// Migração de schema na inicialização (task 11): grava a versão atual e aplica
+// migrações futuras antes de qualquer leitura/escrita de dados. Idempotente.
+if (globalThis.browser?.storage) {
+  storage.migrarSeNecessario();
+}

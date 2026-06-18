@@ -130,3 +130,38 @@ test('operações sensíveis exigem sessão desbloqueada', async () => {
     assert.equal(r.erro, 'SESSAO_BLOQUEADA', `${type} deveria exigir desbloqueio`);
   }
 });
+
+/* --------------------------------- task 14 --------------------------------- */
+
+test('EXPORT_DATA → IMPORT_DATA reconstrói os MFAs (códigos preservados)', async () => {
+  await salvar('GitHub', 'github.com', SEGREDO);
+  await salvar('Conta', 'site.com', OUTRO_SEGREDO);
+
+  const exp = await bg.rotear({ type: 'EXPORT_DATA', senha: 'backup-123' });
+  assert.equal(exp.ok, true);
+  assert.ok(!JSON.stringify(exp.arquivo).includes(SEGREDO)); // nada em claro no arquivo
+
+  // Cofre novo (mock limpo + nova senha mestra) e importa o backup.
+  globalThis.browser = criarBrowserMock();
+  await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'outra-senha-mestra' });
+  const imp = await bg.rotear({ type: 'IMPORT_DATA', arquivo: exp.arquivo, senha: 'backup-123' });
+  assert.equal(imp.ok, true);
+  assert.equal(imp.importados, 2);
+
+  const revelados = [];
+  for (const m of (await bg.rotear({ type: 'LIST_MFAS' })).mfas) {
+    revelados.push((await bg.rotear({ type: 'REVEAL_SECRET', id: m.id })).secret);
+  }
+  assert.deepEqual(revelados.sort(), [SEGREDO, OUTRO_SEGREDO].sort());
+});
+
+test('IMPORT_DATA com senha errada não importa nada', async () => {
+  await salvar('GitHub', 'github.com');
+  const exp = await bg.rotear({ type: 'EXPORT_DATA', senha: 'certa' });
+
+  globalThis.browser = criarBrowserMock();
+  await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'm' });
+  const imp = await bg.rotear({ type: 'IMPORT_DATA', arquivo: exp.arquivo, senha: 'errada' });
+  assert.equal(imp.ok, false);
+  assert.equal((await bg.rotear({ type: 'LIST_MFAS' })).mfas.length, 0);
+});

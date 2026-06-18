@@ -13,7 +13,15 @@ const CHAVE_SALT = 'cryptoSalt';
 const CHAVE_CONTROLE = 'cryptoControle';
 const CHAVE_MFAS = 'mfaItems';
 const CHAVE_SCHEMA = 'schemaVersion';
+const CHAVE_TENTATIVAS = 'mfaUnlockAttempts';
+const CHAVE_ULTIMA_TENTATIVA = 'mfaUnlockLastAttemptAt';
 const SCHEMA_ATUAL = 1;
+
+// Migrações de schema (task 11). Vazio hoje (só existe a v1). Cada migração
+// futura: { de: N, para: N+1, executar: async () => { ... } }, aplicada em ordem.
+const MIGRACOES = [];
+
+export { SCHEMA_ATUAL };
 
 // Lista branca de campos que `atualizarMfa` pode sobrescrever. Proposital:
 // impede que um segredo em claro (ou campo inesperado) seja gravado por engano.
@@ -65,6 +73,48 @@ async function garantirSchemaVersion() {
   if ((await obterSchemaVersion()) === null) {
     await area().set({ [CHAVE_SCHEMA]: SCHEMA_ATUAL });
   }
+}
+
+/**
+ * Migra o schema do storage para a versão atual, se necessário (task 11).
+ * Idempotente: rodar de novo quando já está atualizado é no-op. Deve rodar na
+ * inicialização do background, antes de qualquer leitura/escrita de `mfaItems`.
+ *
+ * - schemaVersion ausente (instalação nova OU dados pré-versionamento) → grava
+ *   a versão atual sem tocar nos dados existentes (não perde MFAs).
+ * - schemaVersion antiga → aplica as migrações em ordem até a versão atual.
+ * @returns {Promise<number>} a versão resultante.
+ */
+export async function migrarSeNecessario() {
+  let versao = await obterSchemaVersion();
+  if (versao === null) {
+    await area().set({ [CHAVE_SCHEMA]: SCHEMA_ATUAL });
+    return SCHEMA_ATUAL;
+  }
+  for (const migracao of MIGRACOES) {
+    if (versao === migracao.de) {
+      await migracao.executar();
+      versao = migracao.para;
+      await area().set({ [CHAVE_SCHEMA]: versao });
+    }
+  }
+  return versao;
+}
+
+/* ---------------------- rate limiting de desbloqueio (task 10) ---------------------- */
+
+/** Nº de tentativas erradas consecutivas (0 se ausente). */
+export async function obterTentativas() {
+  const dados = await area().get(CHAVE_TENTATIVAS);
+  return typeof dados[CHAVE_TENTATIVAS] === 'number' ? dados[CHAVE_TENTATIVAS] : 0;
+}
+
+export async function salvarTentativas(n) {
+  await area().set({ [CHAVE_TENTATIVAS]: n, [CHAVE_ULTIMA_TENTATIVA]: Date.now() });
+}
+
+export async function resetarTentativas() {
+  await area().set({ [CHAVE_TENTATIVAS]: 0 });
 }
 
 /* -------------------------------- MFAs (task 03) ----------------------------- */
