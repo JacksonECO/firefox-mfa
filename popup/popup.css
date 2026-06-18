@@ -7,6 +7,16 @@
   box-sizing: border-box;
 }
 
+/*
+ * Garante que o atributo `hidden` SEMPRE esconda o elemento, mesmo quando uma
+ * regra de componente define `display` (ex: .dialog e .card__feedback usam
+ * display:flex, cujo seletor de classe sobreporia o `[hidden]` do navegador).
+ * Sem isto, esses overlays ficam presos sobre a tela (ver ia/19).
+ */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   width: 340px;
