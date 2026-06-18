@@ -12,7 +12,7 @@
         <h1 class="app__title">Firefox MFA</h1>
       </header>
 
-      <!-- Primeiro acesso: criar senha mestra (versão simplificada; a task 05 amplia) -->
+      <!-- Primeiro acesso: criar senha mestra -->
       <section id="view-criar-senha" class="view" hidden>
         <p class="view__desc">Defina uma senha mestra para proteger seus códigos.</p>
         <form id="form-criar-senha" class="form" novalidate>
@@ -20,49 +20,93 @@
             <span class="field__label">Senha mestra</span>
             <input
               class="field__input"
-              id="criar-senha-input"
+              id="criar-senha"
               type="password"
               autocomplete="new-password"
             />
           </label>
           <p class="field__erro" id="criar-senha-erro" role="alert"></p>
+
+          <label class="field">
+            <span class="field__label">Confirmar senha</span>
+            <input
+              class="field__input"
+              id="criar-senha-conf"
+              type="password"
+              autocomplete="new-password"
+            />
+          </label>
+          <p class="field__erro" id="criar-senha-conf-erro" role="alert"></p>
+
+          <p class="view__aviso">
+            Atenção: se você esquecer a senha mestra, os dados não poderão ser recuperados.
+          </p>
           <button class="btn" type="submit">Criar senha e continuar</button>
         </form>
       </section>
 
-      <!-- Desbloqueio (versão simplificada; a task 05 amplia) -->
+      <!-- Desbloqueio -->
       <section id="view-desbloquear" class="view" hidden>
         <p class="view__desc">Digite sua senha mestra para desbloquear.</p>
         <form id="form-desbloquear" class="form" novalidate>
           <label class="field">
             <span class="field__label">Senha mestra</span>
-            <input
-              class="field__input"
-              id="desbloquear-input"
-              type="password"
-              autocomplete="current-password"
-            />
+            <span class="field__secret">
+              <input
+                class="field__input"
+                id="desbloquear-senha"
+                type="password"
+                autocomplete="current-password"
+              />
+              <button
+                class="btn-link"
+                id="desbloquear-toggle"
+                type="button"
+                aria-label="Mostrar ou ocultar a senha"
+              >
+                Mostrar
+              </button>
+            </span>
           </label>
           <p class="field__erro" id="desbloquear-erro" role="alert"></p>
-          <button class="btn" type="submit">Desbloquear</button>
+          <button class="btn" id="desbloquear-btn" type="submit">Desbloquear</button>
         </form>
       </section>
 
-      <!-- Cadastro de novo MFA -->
-      <section id="view-cadastro" class="view" hidden>
-        <p class="view__desc">Cadastrar novo MFA</p>
-        <form id="form-cadastro" class="form" novalidate>
+      <!-- Tela principal: listagem -->
+      <section id="view-principal" class="view" hidden>
+        <div class="principal__topo">
+          <p class="principal__contexto" id="principal-contexto"></p>
+          <button class="btn-link" id="btn-ver-todos" type="button" hidden></button>
+        </div>
+
+        <ul class="lista" id="lista-mfas"></ul>
+
+        <div class="vazio" id="principal-vazio" hidden>
+          <p class="vazio__msg" id="vazio-msg">Nenhum MFA cadastrado ainda.</p>
+        </div>
+
+        <button class="btn" id="btn-adicionar" type="button">+ Adicionar novo</button>
+      </section>
+
+      <!-- Formulário compartilhado: criar (task 04) e editar (task 09) -->
+      <section id="view-formulario" class="view" hidden>
+        <div class="principal__topo">
+          <p class="view__desc" id="form-titulo">Cadastrar novo MFA</p>
+          <button class="btn-link" id="form-voltar" type="button">Voltar</button>
+        </div>
+        <form id="form-mfa" class="form" novalidate>
           <label class="field">
             <span class="field__label">Nome <span class="field__req">*</span></span>
-            <input class="field__input" id="cadastro-nome" type="text" maxlength="100" />
+            <input class="field__input" id="mfa-nome" type="text" maxlength="100" />
           </label>
-          <p class="field__erro" id="cadastro-nome-erro" role="alert"></p>
+          <p class="field__erro" id="mfa-nome-erro" role="alert"></p>
 
           <label class="field">
             <span class="field__label">Site (domínio)</span>
             <input
               class="field__input"
-              id="cadastro-dominio"
+              id="mfa-dominio"
               type="text"
               maxlength="255"
               placeholder="ex: github.com"
@@ -74,7 +118,7 @@
             <span class="field__secret">
               <input
                 class="field__input"
-                id="cadastro-secret"
+                id="mfa-secret"
                 type="password"
                 autocomplete="off"
                 autocapitalize="off"
@@ -82,7 +126,7 @@
               />
               <button
                 class="btn-link"
-                id="cadastro-secret-toggle"
+                id="mfa-secret-toggle"
                 type="button"
                 aria-label="Mostrar ou ocultar a chave"
               >
@@ -90,13 +134,54 @@
               </button>
             </span>
           </label>
-          <p class="field__erro" id="cadastro-secret-erro" role="alert"></p>
+          <p class="field__erro" id="mfa-secret-erro" role="alert"></p>
 
           <button class="btn" type="submit">Salvar MFA</button>
-          <p class="form__status" id="cadastro-status" role="status"></p>
+          <button class="btn btn--perigo" id="btn-excluir" type="button" hidden>
+            Excluir MFA
+          </button>
+          <p class="form__status" id="mfa-status" role="status"></p>
         </form>
       </section>
+
+      <!-- Diálogo de confirmação de exclusão (não usa confirm() nativo) -->
+      <div id="dialog-excluir" class="dialog" hidden>
+        <div class="dialog__caixa" role="alertdialog" aria-labelledby="dialog-excluir-msg">
+          <p class="dialog__msg" id="dialog-excluir-msg">
+            Tem certeza? Essa ação não pode ser desfeita.
+          </p>
+          <div class="dialog__acoes">
+            <button class="btn btn--secundario" id="dialog-cancelar" type="button">
+              Cancelar
+            </button>
+            <button class="btn btn--perigo" id="dialog-confirmar" type="button">Excluir</button>
+          </div>
+        </div>
+      </div>
     </main>
+
+    <!-- Template do card (clonado por JS; nome/domínio via textContent) -->
+    <template id="tpl-card">
+      <li class="card">
+        <div class="card__info">
+          <span class="card__nome"></span>
+          <span class="card__dominio"></span>
+        </div>
+        <button class="card__codigo" type="button" title="Copiar código">
+          <span class="card__codigo-texto">······</span>
+          <span class="card__feedback" hidden></span>
+        </button>
+        <div class="card__cronometro" aria-hidden="true">
+          <svg class="ring" viewBox="0 0 36 36">
+            <circle class="ring__bg" cx="18" cy="18" r="16" />
+            <circle class="ring__fg" cx="18" cy="18" r="16" />
+          </svg>
+          <span class="card__segundos"></span>
+        </div>
+        <button class="card__editar" type="button" aria-label="Editar MFA">✎</button>
+      </li>
+    </template>
+
     <script type="module" src="popup.js"></script>
   </body>
 </html>

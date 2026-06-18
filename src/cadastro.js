@@ -38,3 +38,12 @@ export function validarCadastro({ nome, dominio, secret } = {}) {
     },
   };
 }
+
+/**
+ * Indica se o segredo foi alterado na edição (task 09). Compara os valores já
+ * normalizados; se forem iguais, não é preciso recriptografar (evita gerar um
+ * novo IV/ciphertext à toa).
+ */
+export function segredoFoiAlterado(original, novo) {
+  return normalizarSegredo(original) !== normalizarSegredo(novo);
+}

@@ -9,7 +9,9 @@
 
 import * as sessao from './sessao.js';
 import * as storage from './storage.js';
-import { validarCadastro } from './cadastro.js';
+import * as cripto from './crypto.js';
+import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
+import { gerarTOTP, segundosRestantes } from './totp.js';
 
 /** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
 function metadados(mfa) {
@@ -33,9 +35,11 @@ function metadados(mfa) {
  *  - LOCK               → { ok }                                (task 02)
  *  - SESSION_STATUS     → { desbloqueado }                      (task 02)
  *  - SAVE_MFA           → { ok, mfa? , erro?/erros? }           (task 04)
- *
- * Tipos LIST_MFAS / GET_CODE / REVEAL_SECRET chegam nas tasks seguintes
- * (06, 07, 09).
+ *  - LIST_MFAS          → { ok, mfas }   (só metadados)         (task 06)
+ *  - GET_CODE           → { ok, codigo, segundosRestantes }     (task 07)
+ *  - REVEAL_SECRET      → { ok, secret } (exceção do fluxo de edição) (task 09)
+ *  - UPDATE_MFA         → { ok, mfa? , erro?/erros? }           (task 09)
+ *  - DELETE_MFA         → { ok, removidos }                     (task 09)
  */
 export async function rotear(mensagem) {
   switch (mensagem?.type) {
@@ -83,6 +87,84 @@ export async function rotear(mensagem) {
       } catch (erro) {
         return { ok: false, erro: erro.message };
       }
+    }
+
+    case 'LIST_MFAS': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const todos = await storage.listarMfas();
+      return { ok: true, mfas: todos.map(metadados) };
+    }
+
+    case 'GET_CODE': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const mfa = await storage.obterMfa(mensagem.id);
+      if (!mfa) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      try {
+        // O segredo só existe em claro aqui, neste escopo, e nunca sai do
+        // background: devolvemos apenas o código de 6 dígitos.
+        const segredo = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
+        const codigo = await gerarTOTP(segredo);
+        return { ok: true, codigo, segundosRestantes: segundosRestantes(Date.now()) };
+      } catch {
+        return { ok: false, erro: 'FALHA_CODIGO' };
+      }
+    }
+
+    case 'REVEAL_SECRET': {
+      // Exceção deliberada da arquitetura (ia/02): só o fluxo de edição (task 09)
+      // recebe o segredo em claro, de forma pontual, para popular o formulário.
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const mfa = await storage.obterMfa(mensagem.id);
+      if (!mfa) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      try {
+        const secret = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
+        return { ok: true, secret };
+      } catch {
+        return { ok: false, erro: 'FALHA' };
+      }
+    }
+
+    case 'UPDATE_MFA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const validacao = validarCadastro({
+        nome: mensagem.nome,
+        dominio: mensagem.dominio,
+        secret: mensagem.secret,
+      });
+      if (!validacao.valido) return { ok: false, erros: validacao.erros };
+      const mfa = await storage.obterMfa(mensagem.id);
+      if (!mfa) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      try {
+        const dadosNovos = {
+          nome: validacao.normalizado.nome,
+          dominio: validacao.normalizado.dominio,
+        };
+        // Só recriptografa (novo IV) se o segredo realmente mudou.
+        const original = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
+        if (segredoFoiAlterado(original, validacao.normalizado.secret)) {
+          const { ciphertext, iv } = await cripto.criptografar(
+            validacao.normalizado.secret,
+            chave,
+          );
+          dadosNovos.secretCriptografado = ciphertext;
+          dadosNovos.iv = iv;
+        }
+        const atualizado = await storage.atualizarMfa(mensagem.id, dadosNovos);
+        return { ok: true, mfa: metadados(atualizado) };
+      } catch (erro) {
+        return { ok: false, erro: erro.message };
+      }
+    }
+
+    case 'DELETE_MFA': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const removidos = await storage.removerMfa(mensagem.id);
+      return { ok: true, removidos };
     }
 
     default:

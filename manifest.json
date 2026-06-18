@@ -16,7 +16,8 @@
   "permissions": [
     "storage",
     "alarms",
-    "activeTab"
+    "activeTab",
+    "clipboardWrite"
   ],
   "action": {
     "default_title": "Firefox MFA",
