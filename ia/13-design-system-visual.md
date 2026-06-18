@@ -1,4 +1,4 @@
-# 10 — Design system visual
+# 13 — Design system visual
 
 ## Objetivo
 
@@ -24,7 +24,8 @@ produto, mesmo que a segurança por trás esteja correta.
 - Estados visuais: hover, foco (acessibilidade de teclado), "copiado com sucesso", erro de
   validação, estado vazio, estado de carregamento.
 - Definição de variáveis CSS (custom properties) centralizando cores, raios de borda,
-  espaçamentos e tipografia, para reuso em todos os componentes das tasks 04–09.
+  espaçamentos e tipografia, para reuso em todos os componentes das tasks 04, 05, 06, 07, 08 e
+  09.
 - Decisão sobre suporte a tema claro/escuro (recomendado: detectar preferência do sistema via
   `prefers-color-scheme` e seguir automaticamente, sem necessidade de toggle manual no MVP).
 
@@ -60,7 +61,7 @@ produto, mesmo que a segurança por trás esteja correta.
 
 ## Dependências
 
-- Tasks 04, 05, 06, 07, 08, 09 — esta task revisita/aplica estilos sobre os componentes já
+- Tasks 04, 05, 06, 07, 08 e 09 — esta task revisita/aplica estilos sobre os componentes já
   implementados por elas. Pode ser feita de forma incremental (aplicar o tema conforme cada
   tela é construída) ou como uma passada final de polimento — a critério de quem
   implementar, mas o guia (variáveis, paleta, espaçamento) deve existir desde o início para

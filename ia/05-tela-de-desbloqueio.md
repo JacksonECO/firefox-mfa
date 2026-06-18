@@ -1,4 +1,4 @@
-# 04 — Tela de desbloqueio
+# 05 — Tela de desbloqueio
 
 ## Objetivo
 
@@ -22,7 +22,7 @@ claro ao usuário quando a sessão expirou (2 minutos) e por quê.
 - Tela de **desbloqueio** (acessos seguintes): campo de senha mestra, botão de desbloquear,
   feedback de erro em caso de senha incorreta.
 - Ao desbloquear com sucesso, reinicia o timer de 2 minutos (task 02) e navega para a tela
-  principal (task 05).
+  principal (task 06).
 
 **Não entra:**
 - A lógica de derivação/verificação de chave em si (já implementada na task 02 — esta tela
@@ -52,8 +52,10 @@ claro ao usuário quando a sessão expirou (2 minutos) e por quê.
 ## Critérios de aceite (teste manual)
 
 1. Primeira abertura do popup (instalação limpa): aparece a tela de cadastro de senha mestra.
-2. Após cadastrar, popup navega para a tela principal (mesmo que vazia, antes da task 05
-   estar completa pode ser um placeholder).
+2. Após cadastrar, popup navega para a tela principal (mesmo que vazia, antes da task 06
+   estar completa pode ser um placeholder). Se a task 04 (cadastro de MFA) já estiver
+   implementada, deve ser possível, neste ponto do roadmap, cadastrar a senha mestra e em
+   seguida um MFA de teste, fechando o primeiro ciclo completo do produto.
 3. Fechar e reabrir o popup dentro de 2 minutos: vai direto para a tela principal, sem pedir
    senha de novo.
 4. Aguardar mais de 2 minutos e reabrir: aparece a tela de desbloqueio pedindo a senha.
@@ -70,7 +72,10 @@ claro ao usuário quando a sessão expirou (2 minutos) e por quê.
 
 ## Riscos / pontos de atenção de segurança
 
-- Não permitir múltiplas tentativas ilimitadas sem nenhum atraso pode facilitar força bruta
-  local — como é um cofre local (sem rede), o risco principal é alguém com acesso físico ao
-  perfil do navegador; ainda assim, considerar um pequeno atraso progressivo após algumas
-  tentativas erradas como melhoria futura (documentar, não bloqueante para o MVP).
+- Esta tela é o ponto onde o rate limiting de tentativas erradas (task 10, tratada como parte
+  do MVP de segurança, não como melhoria futura) se torna visível ao usuário — o atraso
+  progressivo deve ser perceptível aqui mesmo que a lógica de contagem viva no
+  `background.js`.
+- `nome` de exibição eventual nesta tela (não há, hoje, mas se vier a existir qualquer dado do
+  usuário renderizado aqui) deve seguir a mesma regra de sanitização (`textContent`, nunca
+  `innerHTML`) das demais telas.

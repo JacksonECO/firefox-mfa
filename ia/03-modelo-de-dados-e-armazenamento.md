@@ -21,7 +21,9 @@ de segurança do produto.
 **Não entra:**
 - Lógica de criptografia em si (já implementada na task 02 — esta task só consome as
   funções `criptografar`/`descriptografar`).
-- UI de listagem/cadastro (tasks 05, 08, 09).
+- UI de listagem/cadastro (tasks 04, 06, 09).
+- Versionamento/migração formal de schema (task 11 dedicada) — aqui só é reservado o espaço
+  para o metadado `schemaVersion`.
 
 ## Decisões técnicas
 
@@ -39,12 +41,14 @@ de segurança do produto.
   ```
 - Os registros são guardados em `browser.storage.local` sob uma chave própria, por exemplo
   `mfaItems: MfaItem[]`. O salt de derivação de chave (task 02) fica em outra chave separada,
-  ex: `cryptoSalt`.
+  ex: `cryptoSalt`. Um metadado `schemaVersion: number` (ex: `1`) é salvo junto a essa área de
+  metadados — não sensível, usado pela task 11 (versionamento de schema) para futuras
+  migrações; o schema do registro de MFA em si não muda por causa disso.
 - Camada de acesso a dados (módulo `src/storage.js` ou similar), com funções:
   - `salvarMfa({ nome, dominio, secretEmClaro })` → criptografa o segredo (usando o módulo da
     task 02) e persiste o registro.
   - `listarMfas()` → retorna todos os registros (sem descriptografar — descriptografia é
-    feita só no momento de exibir o código, task 06).
+    feita só no momento de exibir o código, task 07).
   - `listarMfasPorDominio(dominio)` → filtra os registros cujo campo `dominio` é igual ao
     domínio informado.
   - `atualizarMfa(id, dadosNovos)`.

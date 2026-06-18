@@ -1,4 +1,4 @@
-# 06 — Geração de código TOTP e cronômetro
+# 07 — Geração de código TOTP e cronômetro
 
 ## Objetivo
 
@@ -26,8 +26,8 @@ memória, nunca tocando o disco.
   reabrir o popup.
 
 **Não entra:**
-- UI completa do card (task 07) — aqui é só a lógica de geração de código + cronômetro,
-  exposta como uma função/componente que a task 07 consome.
+- UI completa do card (task 08) — aqui é só a lógica de geração de código + cronômetro,
+  exposta como uma função/componente que a task 08 consome.
 
 ## Decisões técnicas
 
@@ -63,9 +63,25 @@ memória, nunca tocando o disco.
 ## Testes automatizados
 
 - Testes unitários do gerador de código TOTP usando os **vetores de teste oficiais do RFC
-  6238** (segredos e timestamps conhecidos com o código esperado), garantindo conformidade
-  com a especificação.
-- Teste da função de cálculo de tempo restante na janela de 30s, dado um timestamp arbitrário.
+  6238, Apêndice B**, com o segredo de teste ASCII `12345678901234567890`
+  (Base32: `GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ`), HMAC-SHA1, para os timestamps T=59,
+  T=1111111109, T=1111111111, T=1234567890 e T=2000000000. **Atenção**: o RFC apresenta os
+  códigos de exemplo com 8 dígitos; o produto trunca para 6 dígitos (padrão adotado pela
+  maioria dos serviços reais) — documentar essa escolha de truncamento explicitamente no
+  código e validar nos testes que o truncamento usado é consistente com os últimos 6 dígitos
+  do valor de 8 dígitos do RFC para os mesmos vetores.
+- Teste de borda no limite exato da janela de 30s: gerar o código em T=29.999s e T=30.001s
+  (mesmo segredo) e confirmar que são códigos diferentes nos lados opostos da fronteira do
+  passo de tempo.
+- Teste da função de cálculo de "segundos restantes": para um timestamp arbitrário, validar a
+  fórmula `30 - (Math.floor(Date.now()/1000) % 30)`, incluindo o caso de fronteira em que o
+  resultado deveria ser 30 (não 0) no instante exato em que uma nova janela começa.
+- Teste de que a regeneração automática do código ao virar a janela de 30s realmente dispara
+  (usar fake timers avançando o relógio através de uma fronteira de 30s) sem exigir
+  fechar/reabrir o popup.
+- Teste de robustez de input: segredo Base32 com padding `=`, sem padding, em minúsculas —
+  confirmar que o gerador de TOTP não falha silenciosamente se receber um valor não
+  normalizado, ainda que a normalização "oficial" aconteça no cadastro (task 04).
 
 ## Riscos / pontos de atenção de segurança
 

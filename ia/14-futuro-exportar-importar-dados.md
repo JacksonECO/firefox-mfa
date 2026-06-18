@@ -1,4 +1,4 @@
-# 11 — (Futuro) Exportar e importar dados
+# 14 — (Futuro) Exportar e importar dados
 
 > **Status: tarefa futura, fora do MVP.** Não bloqueia o lançamento da v1 do plug-in. Incluída
 > aqui para já registrar a intenção e as decisões técnicas previstas, evitando decisões no
@@ -72,6 +72,6 @@ própria (diferente da senha mestra do cofre).
 
 ## Observações
 
-- Como apontado na task 07, eventuais limitações de clipboard ou comportamento específico de
+- Como apontado na task 08, eventuais limitações de clipboard ou comportamento específico de
   outros sistemas operacionais (fora do Ubuntu/Linux) também podem ser tratadas como anexos a
   esta task futura, caso surjam durante o desenvolvimento do MVP.
