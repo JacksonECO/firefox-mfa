@@ -95,6 +95,7 @@ uma única funcionalidade.
 | 16 | [Tela de configurações + rate limit configurável](./16-tela-de-configuracoes.md) | Ajustes do atraso progressivo de senha mestra |
 | 17 | [Trocar a senha mestra](./17-trocar-senha-mestra.md) | Re-deriva a chave e recriptografa todos os segredos |
 | 18 | [Autopreenchimento na página](./18-autopreenchimento-na-pagina.md) | Insere o código no campo do site (opt-in, via seletor) |
+| 19 | [Correção: overlay preso na 1ª abertura](./19-fix-overlay-hidden.md) | `[hidden]` deixava de esconder diálogos/feedback |
 
 ## Princípios que não devem ser violados em nenhuma task
 

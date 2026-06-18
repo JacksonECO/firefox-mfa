@@ -42,6 +42,7 @@ let edicaoId = null; // null = modo criar; id = modo editar
 
 function mostrarVista(nome) {
   if (nome !== 'principal') pararTicker(); // só a tela principal usa o ticker
+  $('dialog-excluir').hidden = true; // o diálogo é transitório: nunca persiste entre telas
   for (const id of VIEWS) $(id).hidden = id !== `view-${nome}`;
 }
 
