@@ -10,7 +10,7 @@ import { extrairDominioDaAba } from '../src/dominio.js';
 import { validarCadastro } from '../src/cadastro.js';
 import { validarCadastroSenha, decidirTela } from '../src/senha.js';
 import { decidirListagem, filtrarPorDominio } from '../src/listagem.js';
-import { renderizarLista, pararTicker } from './cards.js';
+import { renderizarLista, pararTicker, copiarParaClipboard } from './cards.js';
 
 const VIEWS = [
   'view-criar-senha',
@@ -58,7 +58,7 @@ async function rotearVistaInicial() {
     /* background indisponível: trata como primeiro acesso */
   }
   const tela = decidirTela({ temSenha, sessaoAtiva });
-  if (tela === 'principal') await abrirPrincipal();
+  if (tela === 'principal') await abrirPrincipal({ autoCopiar: true });
   else mostrarVista(tela);
 }
 
@@ -118,7 +118,7 @@ async function aoCriarSenha(evento) {
   const resp = await enviar({ type: 'SET_MASTER_PASSWORD', senha });
   $('criar-senha').value = '';
   $('criar-senha-conf').value = '';
-  if (resp?.ok) await abrirPrincipal();
+  if (resp?.ok) await abrirPrincipal({ autoCopiar: true });
   else dizer(senhaErro, resp?.erro ?? 'Não foi possível criar a senha.');
 }
 
@@ -144,13 +144,13 @@ async function aoDesbloquear(evento) {
     dizer(botao, 'Desbloquear');
   }
   $('desbloquear-senha').value = '';
-  if (resp?.ok) await abrirPrincipal();
+  if (resp?.ok) await abrirPrincipal({ autoCopiar: true });
   else dizer(erro, 'Senha incorreta.');
 }
 
 /* ------------------------------ tela principal ------------------------------ */
 
-async function abrirPrincipal() {
+async function abrirPrincipal({ autoCopiar = false } = {}) {
   edicaoId = null;
   mostrarVista('principal');
   dominioAtual = await obterDominioAtual();
@@ -162,10 +162,25 @@ async function abrirPrincipal() {
     return;
   }
   mfasCache = resp.mfas;
-  renderizarPrincipal();
+  const decisao = renderizarPrincipal();
+  if (autoCopiar) await autocopiarSeUnico(decisao);
+}
+
+// Autocópia (task 15): só na abertura do popup e só com 1 MFA do domínio.
+async function autocopiarSeUnico(decisao) {
+  if (decisao.modo !== 'dominio' || decisao.itens.length !== 1) return;
+  const resp = await enviar({ type: 'GET_CODE', id: decisao.itens[0].id });
+  if (!resp?.ok) return;
+  try {
+    await copiarParaClipboard(resp.codigo);
+    dizer($('principal-aviso'), 'Código copiado automaticamente ✓');
+  } catch {
+    /* clipboard indisponível: silencioso, o usuário ainda pode clicar */
+  }
 }
 
 function renderizarPrincipal() {
+  limpar($('principal-aviso'));
   const decisao = decidirListagem({ todos: mfasCache, dominioAtual, verTodos });
   const lista = $('lista-mfas');
   const vazio = $('principal-vazio');
@@ -181,7 +196,7 @@ function renderizarPrincipal() {
     dizer($('vazio-msg'), 'Nenhum MFA cadastrado ainda. Adicione o primeiro abaixo.');
     botaoVerTodos.hidden = true;
     dizer(contexto, '');
-    return;
+    return decisao;
   }
 
   lista.hidden = false;
@@ -207,6 +222,7 @@ function renderizarPrincipal() {
     obterCodigo: (id) => enviar({ type: 'GET_CODE', id }),
     aoEditar: (id) => abrirFormulario(id),
   });
+  return decisao;
 }
 
 function alternarVerTodos() {

@@ -91,6 +91,7 @@ uma única funcionalidade.
 | 12 | [Hardening: CSP, permissões e isolamento](./12-hardening-csp-permissoes.md) | Auditoria final de segurança do MVP |
 | 13 | [Design system visual](./13-design-system-visual.md) | Estilo arredondado, sóbrio e futurista |
 | 14 | [(Futuro) Exportar/Importar dados](./14-futuro-exportar-importar-dados.md) | Backup criptografado com senha própria |
+| 15 | [Autocópia de MFA único](./15-autocopiar-mfa-unico.md) | Copia o código ao abrir se houver 1 MFA do domínio; ordena ao listar todos |
 
 ## Princípios que não devem ser violados em nenhuma task
 

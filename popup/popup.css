@@ -190,6 +190,13 @@ body {
   color: var(--color-muted);
 }
 
+.principal__aviso {
+  margin: 0 0 var(--space-2);
+  min-height: 1em;
+  font-size: var(--fs-small);
+  color: var(--color-success);
+}
+
 .lista {
   list-style: none;
   margin: 0 0 var(--space-3);
