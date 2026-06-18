@@ -37,8 +37,8 @@ navegador. É a fundação técnica do produto.
   ```
 - `manifest.json`:
   - `manifest_version: 3`
-  - `permissions`: começar só com `storage` (a permissão `activeTab`/`tabs` e
-    `clipboardWrite` entram nas tasks 05 e 07, respectivamente, quando forem de fato usadas).
+  - `permissions`: começar só com `storage` (a permissão `activeTab` e
+    `clipboardWrite` entram nas tasks 04 e 08, respectivamente, quando forem de fato usadas).
   - `action.default_popup`: `popup/popup.html`
   - `background.service_worker`: `src/background.js` (vazio por enquanto)
 - Sem bundler/transpiler: JS puro carregado diretamente via `<script src="...">`/ES modules

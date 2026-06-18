@@ -78,16 +78,19 @@ uma única funcionalidade.
 | # | Task | Resumo |
 |---|------|--------|
 | 01 | [Setup da extensão base](./01-setup-extensao-base.md) | Estrutura do projeto, manifest.json, popup base |
-| 02 | [Criptografia e senha mestra](./02-criptografia-e-senha-mestra.md) | Derivação de chave, AES-GCM, expiração em 2min |
+| 02 | [Criptografia e senha mestra](./02-criptografia-e-senha-mestra.md) | Derivação de chave (PBKDF2/AES-GCM), arquitetura popup/background, expiração em 2min |
 | 03 | [Modelo de dados e armazenamento](./03-modelo-de-dados-e-armazenamento.md) | Schema e camada de acesso ao storage local |
-| 04 | [Tela de desbloqueio](./04-tela-de-desbloqueio.md) | Cadastro/validação da senha mestra ao abrir o popup |
-| 05 | [Tela principal — listagem por domínio](./05-tela-principal-listagem-por-dominio.md) | Filtro por domínio atual + botão "ver todos" |
-| 06 | [Geração de código TOTP e cronômetro](./06-geracao-codigo-totp-e-cronometro.md) | Código de 6 dígitos + contagem de 30s |
-| 07 | [Card de MFA e copiar para clipboard](./07-card-mfa-copiar-clipboard.md) | UI do card + copiar com um clique (Ubuntu/Linux) |
-| 08 | [Cadastro de novo MFA](./08-cadastro-novo-mfa.md) | Formulário de criação (nome, site opcional, key) |
+| 04 | [Cadastro de novo MFA](./04-cadastro-novo-mfa.md) | Formulário de criação (nome, site opcional, key) — primeiro marco testável |
+| 05 | [Tela de desbloqueio](./05-tela-de-desbloqueio.md) | Cadastro/validação da senha mestra ao abrir o popup |
+| 06 | [Tela principal — listagem por domínio](./06-tela-principal-listagem-por-dominio.md) | Filtro por domínio atual + botão "ver todos" |
+| 07 | [Geração de código TOTP e cronômetro](./07-geracao-codigo-totp-e-cronometro.md) | Código de 6 dígitos + contagem de 30s |
+| 08 | [Card de MFA e copiar para clipboard](./08-card-mfa-copiar-clipboard.md) | UI do card + copiar com um clique (Ubuntu/Linux) |
 | 09 | [Edição e exclusão de MFA](./09-edicao-e-exclusao-mfa.md) | Editar/remover um MFA existente |
-| 10 | [Design system visual](./10-design-system-visual.md) | Estilo arredondado, sóbrio e futurista |
-| 11 | [(Futuro) Exportar/Importar dados](./11-futuro-exportar-importar-dados.md) | Backup criptografado com senha própria |
+| 10 | [Rate limiting de senha mestra](./10-rate-limiting-senha-mestra.md) | Atraso progressivo contra força bruta local |
+| 11 | [Versionamento e migração de schema](./11-versionamento-schema.md) | `schemaVersion` + migração incremental |
+| 12 | [Hardening: CSP, permissões e isolamento](./12-hardening-csp-permissoes.md) | Auditoria final de segurança do MVP |
+| 13 | [Design system visual](./13-design-system-visual.md) | Estilo arredondado, sóbrio e futurista |
+| 14 | [(Futuro) Exportar/Importar dados](./14-futuro-exportar-importar-dados.md) | Backup criptografado com senha própria |
 
 ## Princípios que não devem ser violados em nenhuma task
 
@@ -96,3 +99,6 @@ uma única funcionalidade.
 2. A UI sempre prioriza o domínio atual antes de mostrar qualquer outra coisa.
 3. Tudo funciona 100% offline.
 4. O visual é sempre arredondado, sóbrio e futurista — nunca com aparência datada.
+5. Rate limiting de tentativas de senha mestra, Content Security Policy explícita e
+   sanitização de dados do usuário (`textContent`, nunca `innerHTML`) são parte do MVP de
+   segurança, não polimento opcional a ser feito "depois".
