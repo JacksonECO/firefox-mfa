@@ -67,6 +67,14 @@ fake timers). Requer Node 20+ (Web Crypto global e `mock.timers`).
 ## Permissões
 
 O manifest pede `storage` (persistência local), `alarms` (expiração da sessão em 2 min, da
-task 02) e `activeTab` (ler o domínio da aba ativa para pré-preencher o cadastro, task 04).
-A permissão `clipboardWrite` entra na task 08 (copiar o código), seguindo o princípio de
-menor privilégio. A auditoria final de permissões e CSP está na task 12.
+task 02), `activeTab` (ler o domínio da aba ativa para pré-preencher o cadastro/filtrar a
+listagem, tasks 04 e 06) e `clipboardWrite` (copiar o código com um clique, task 08),
+seguindo o princípio de menor privilégio. A auditoria final de permissões e CSP está na
+task 12.
+
+## Suporte de plataforma
+
+O MVP tem suporte garantido em **Ubuntu/Linux + Firefox**. A cópia do código usa
+`navigator.clipboard.writeText` dentro do gesto de clique do usuário. Outros sistemas
+operacionais e navegadores são trabalho futuro (task 14), incluindo eventuais fallbacks de
+cópia manual.

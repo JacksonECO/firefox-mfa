@@ -93,6 +93,12 @@ export async function listarMfasPorDominio(dominio) {
   return todos.filter((mfa) => mfa.dominio === dominio);
 }
 
+/** Retorna um MFA pelo id (com o segredo ainda criptografado), ou null. */
+export async function obterMfa(id) {
+  const todos = await lerTodos();
+  return todos.find((mfa) => mfa.id === id) ?? null;
+}
+
 /**
  * Cria um MFA: criptografa o segredo (task 02) e persiste APENAS o ciphertext.
  * O `secretEmClaro` nunca é gravado — só o resultado criptografado + IV.

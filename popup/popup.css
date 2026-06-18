@@ -1,7 +1,6 @@
 /*
- * Estilo do popup (tasks 01 e 04). Sóbrio e arredondado; o design system
+ * Estilo do popup (tasks 01–09). Sóbrio e arredondado; o design system
  * completo (tokens centralizados em theme.css, paleta, estados) é a task 13.
- * Aqui só o necessário para o cadastro funcionar com aparência limpa.
  */
 
 * {
@@ -10,7 +9,7 @@
 
 body {
   margin: 0;
-  width: 320px;
+  width: 340px;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   background: #10131c;
@@ -38,6 +37,12 @@ body {
   margin: 0 0 12px;
   font-size: 13px;
   color: #9aa3b8;
+}
+
+.view__aviso {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: #d9a441;
 }
 
 /* Formulários */
@@ -97,6 +102,8 @@ body {
   color: #f0727d;
 }
 
+/* Botões */
+
 .btn {
   margin-top: 4px;
   padding: 9px 12px;
@@ -119,6 +126,27 @@ body {
   outline-offset: 2px;
 }
 
+.btn[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn--perigo {
+  background: #b3343f;
+}
+
+.btn--perigo:hover {
+  background: #9e2d37;
+}
+
+.btn--secundario {
+  background: #2a3142;
+}
+
+.btn--secundario:hover {
+  background: #353d52;
+}
+
 .btn-link {
   padding: 4px 6px;
   font-size: 12px;
@@ -139,18 +167,231 @@ body {
   color: #4ade80;
 }
 
+/* Tela principal */
+
+.principal__topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.principal__contexto {
+  margin: 0;
+  font-size: 13px;
+  color: #9aa3b8;
+}
+
+.lista {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vazio {
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.vazio__msg {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #9aa3b8;
+}
+
+/* Card */
+
+.card {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #1a1f2e;
+  border: 1px solid #2a3142;
+  border-radius: 12px;
+}
+
+.card__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.card__nome {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card__dominio {
+  font-size: 12px;
+  color: #9aa3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card__codigo {
+  position: relative;
+  padding: 4px 8px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: #eef2ff;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.card__codigo:hover {
+  background: #232a3b;
+}
+
+.card__feedback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-family: system-ui, sans-serif;
+  letter-spacing: 0;
+  border-radius: 8px;
+  background: #1a1f2e;
+}
+
+.card__feedback--ok {
+  color: #4ade80;
+}
+
+.card__feedback--erro {
+  color: #f0727d;
+}
+
+.card__cronometro {
+  position: relative;
+  width: 28px;
+  height: 28px;
+}
+
+.ring {
+  width: 28px;
+  height: 28px;
+  transform: rotate(-90deg);
+}
+
+.ring__bg {
+  fill: none;
+  stroke: #2a3142;
+  stroke-width: 3;
+}
+
+.ring__fg {
+  fill: none;
+  stroke: #6366f1;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.card__segundos {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #9aa3b8;
+}
+
+.card__editar {
+  padding: 4px 8px;
+  font-size: 14px;
+  color: #a5b4fc;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.card__editar:hover {
+  background: #232a3b;
+}
+
+/* Diálogo */
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 10, 16, 0.7);
+}
+
+.dialog__caixa {
+  width: 100%;
+  padding: 16px;
+  background: #1a1f2e;
+  border: 1px solid #2a3142;
+  border-radius: 12px;
+}
+
+.dialog__msg {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.dialog__acoes {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dialog__acoes .btn {
+  margin-top: 0;
+}
+
 @media (prefers-color-scheme: light) {
   body {
     background: #f5f6fa;
     color: #1b1f2a;
   }
   .view__desc,
-  .field__label {
+  .field__label,
+  .principal__contexto,
+  .vazio__msg,
+  .card__dominio,
+  .card__segundos {
     color: #5b6273;
   }
   .field__input {
     background: #fff;
     border-color: #d4d8e2;
+  }
+  .card,
+  .dialog__caixa {
+    background: #fff;
+    border-color: #e2e6ee;
+  }
+  .card__codigo,
+  .card__nome {
+    color: #1b1f2a;
+  }
+  .card__codigo:hover,
+  .card__editar:hover {
+    background: #eef0f6;
+  }
+  .card__feedback {
+    background: #fff;
   }
   .form__status {
     color: #15803d;
