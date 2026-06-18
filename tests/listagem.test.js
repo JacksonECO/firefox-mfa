@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decidirListagem, filtrarPorDominio } from '../src/listagem.js';
+import { decidirListagem, filtrarPorDominio, ordenarPorNome } from '../src/listagem.js';
 
 const a = { id: '1', nome: 'A', dominio: 'a.com' };
 const b = { id: '2', nome: 'B', dominio: 'b.com' };
@@ -41,4 +41,27 @@ test('filtrarPorDominio inclui o caso null e é exato (subdomínio ≠ raiz)', (
   const app = { id: '4', dominio: 'app.exemplo.com' };
   const raiz = { id: '5', dominio: 'exemplo.com' };
   assert.deepEqual(filtrarPorDominio([app, raiz], 'exemplo.com'), [raiz]);
+});
+
+test('ordenarPorNome ordena alfabeticamente sem mutar a entrada', () => {
+  const entrada = [{ nome: 'Banco' }, { nome: 'amazon' }, { nome: 'Café' }];
+  const saida = ordenarPorNome(entrada);
+  assert.deepEqual(
+    saida.map((m) => m.nome),
+    ['amazon', 'Banco', 'Café'],
+  );
+  assert.equal(entrada[0].nome, 'Banco'); // original intacto
+});
+
+test('listar todos sai ordenado por nome (task 15)', () => {
+  const desordenado = [
+    { id: '1', nome: 'Zulip', dominio: 'z.com' },
+    { id: '2', nome: 'Amazon', dominio: 'a.com' },
+  ];
+  const r = decidirListagem({ todos: desordenado, dominioAtual: null });
+  assert.equal(r.modo, 'todos');
+  assert.deepEqual(
+    r.itens.map((m) => m.nome),
+    ['Amazon', 'Zulip'],
+  );
 });
