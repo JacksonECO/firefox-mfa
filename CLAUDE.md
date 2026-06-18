@@ -1,0 +1,137 @@
+# CLAUDE.md
+
+Guia para agentes de IA e desenvolvedores trabalhando neste repositório. Leia antes de
+escrever qualquer código.
+
+## O que é o projeto
+
+Extensão (plug-in) para **Firefox** que gerencia códigos **MFA / TOTP** (RFC 6238),
+substituindo apps de autenticação externos. Dois diferenciais norteiam **toda** decisão:
+
+1. **Foco no domínio atual** — o popup mostra por padrão só os MFAs do domínio da aba ativa.
+2. **Segurança das chaves** — segredos TOTP sempre criptografados em repouso, decriptados só
+   em memória, 100% local, sem rede.
+
+O planejamento completo está em [`ia/`](./ia/), começando por
+[`ia/00-resumo-do-projeto.md`](./ia/00-resumo-do-projeto.md) (norte do produto + roadmap das
+14 tasks). **Cada task em `ia/` é a fonte de verdade da funcionalidade correspondente** —
+consulte o arquivo da task antes de implementá-la.
+
+> Estado atual: repositório em fase de planejamento. Existem os docs em `ia/` e a `LICENSE`;
+> o código da extensão ainda não foi escrito. Ao começar a implementar, siga a estrutura e a
+> ordem definidas nas tasks.
+
+## Stack e estrutura
+
+- **Vanilla JS + Manifest V3**, sem framework de UI e **sem build step / bundler** (superfície
+  de ataque mínima, fácil de auditar). JS carregado via ES modules nativos.
+- **Web Crypto API nativa** para toda a criptografia (PBKDF2 + AES-GCM). Nunca reimplementar
+  primitiva criptográfica à mão.
+- Lib leve, auditada e **vendorizada** (copiada para o repo, sem CDN/registry em runtime) para
+  o algoritmo TOTP.
+- Plataforma alvo obrigatória no MVP: **Ubuntu/Linux + Firefox**.
+
+Estrutura de pastas planejada (ver `ia/01`):
+
+```
+/manifest.json
+/icons/
+/popup/        popup.html, popup.css, popup.js, theme.css   (UI; superfície mais exposta)
+/src/
+  background.js   service worker — DONO de toda crypto e segredo em claro
+  storage.js      única camada que toca browser.storage.local
+  dominio.js      extrairDominioDaAba(tab) — utilitário compartilhado
+```
+
+## Regras de segurança (inegociáveis)
+
+Segurança é um dos dois diferenciais do produto. Estas regras **não podem ser violadas em
+nenhuma task** — uma mudança que comprometa qualquer uma delas está errada:
+
+1. **Nada sensível em disco ou na rede.** Senha mestra, segredo TOTP em claro e a `CryptoKey`
+   derivada **nunca** são persistidos nem transmitidos. Em storage só vão: salt, valor de
+   controle criptografado, segredos criptografados (AES-GCM) e metadados não sensíveis.
+2. **Toda crypto vive no `background.js`.** Todo código que toca a senha mestra, a `CryptoKey`
+   ou um segredo em claro roda **exclusivamente** no service worker. O popup só troca mensagens
+   (`UNLOCK`, `LIST_MFAS`, `GET_CODE`, `SAVE_MFA`, `REVEAL_SECRET`) — nunca recebe a chave nem
+   o segredo bruto. Motivo técnico: o popup é destruído ao perder foco e uma `CryptoKey`
+   não-extraível não atravessa `runtime.sendMessage`. Motivo de segurança: o popup renderiza
+   dados do usuário e é a maior superfície de XSS.
+3. **Derivação de chave forte.** PBKDF2 com **SHA-256** e **600.000 iterações** (OWASP), salt
+   aleatório de 16 bytes. AES-GCM com **IV aleatório de 12 bytes por registro** — nunca reusar
+   IV com a mesma chave.
+4. **Verificação timing-safe.** Validar a senha mestra apenas pelo sucesso/falha do
+   `crypto.subtle.decrypt` sobre o valor de controle (a tag AES-GCM é checada em tempo
+   constante pelo navegador). **Nunca** comparar strings manualmente como critério de validação.
+5. **Sanitização: `textContent`, nunca `innerHTML`.** `nome` e `dominio` são texto livre do
+   usuário. Ao renderizar, usar exclusivamente `textContent` / DOM API programática. Um nome
+   contendo `<script>` deve aparecer como texto literal. Os caracteres especiais são aceitos na
+   entrada — a defesa é na renderização, não bloqueando a digitação.
+6. **Rate limiting é MVP.** Atraso progressivo após tentativas erradas de senha mestra
+   (contador persistido, controlado no background) faz parte do MVP de segurança, não é
+   polimento futuro.
+7. **Chave em memória expira.** A `CryptoKey` vive só em memória do background e expira após
+   **2 minutos de inatividade** (timer resetado a cada interação, via `alarms`). Reinício do
+   service worker = expiração (aceitável e até desejável).
+8. **Zeroing best-effort.** Chamar `.fill(0)` em `Uint8Array`/`ArrayBuffer` com segredo em
+   claro após o uso. Não é garantia absoluta (GC), mas reduz a janela de exposição.
+9. **Sem logs de segredo.** Nunca `console.log` de senha mestra, chave ou segredo em claro —
+   nem em desenvolvimento. Sem telemetria.
+10. **Menor privilégio.** `permissions` do manifest é exatamente `storage`, `activeTab`,
+    `clipboardWrite`, `alarms`. Nada de `tabs` genérica, `<all_urls>` ou `http://*/*`. CSP
+    explícita (`script-src 'self'; object-src 'self'`).
+
+## Regras de design (UI)
+
+- Visual **arredondado, sóbrio e futurista** — nunca datado (sem bordas 3D, gradientes
+  pesados, sombras exageradas, ícones pixelados).
+- **Tokens centralizados** em CSS custom properties (`popup/theme.css`): cores, raios,
+  espaçamentos (escala de 4px), tipografia. Componentes usam as variáveis, nunca valores
+  hardcoded.
+- **Fonte do sistema** e **ícones SVG inline** — nada carregado por rede (reforça offline-first).
+- Tema claro/escuro automático via `prefers-color-scheme` (sem toggle manual no MVP).
+- Acessibilidade: contraste adequado e foco de teclado sempre visível.
+- Detalhes completos em [`ia/13-design-system-visual.md`](./ia/13-design-system-visual.md).
+
+## Modelo de dados
+
+Registro de MFA (ver `ia/03`):
+
+```js
+{
+  id: string,                  // uuid
+  nome: string,                // obrigatório
+  dominio: string | null,      // opcional
+  secretCriptografado: string, // base64 do ciphertext AES-GCM
+  iv: string,                  // base64 do IV deste registro
+  createdAt: number,
+  updatedAt: number,
+}
+```
+
+- `src/storage.js` é a **única** parte do código que acessa `browser.storage.local` direto.
+- Comparação de domínio é **exata** (`www.x.com` ≠ `x.com`); `hostname` já vem minúsculo do
+  parser nativo de URL.
+- `schemaVersion` (metadado não sensível) versiona o schema para migrações futuras (ver
+  `ia/11`).
+
+## Testes
+
+- Testar com **mocks** de `browser.storage.local`, `navigator.clipboard.writeText` e
+  **fake timers** (sessão de 2 min, janela de 30s).
+- TOTP: usar os **vetores oficiais do RFC 6238 Apêndice B** (segredo
+  `12345678901234567890` → Base32 `GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ`), lembrando que o RFC
+  mostra 8 dígitos e o produto trunca para 6.
+- Cobrir bordas: IV trocado deve falhar; fronteira exata da janela de 30s; domínios com porta,
+  IP literal, subdomínio, case e aba sem `url`; falha de clipboard não deve mostrar "copiado";
+  renderização de `nome`/`dominio` com markup deve usar `textContent`.
+- Cada task em `ia/` lista seus critérios de aceite manuais e testes automatizados — siga-os.
+
+## Convenções de trabalho
+
+- O conteúdo do projeto (docs, UI, comentários) está em **português**. Mantenha o idioma.
+- Antes de implementar uma task, **leia o arquivo correspondente em `ia/`**; ele tem escopo,
+  decisões técnicas, dependências e testes.
+- Respeite a ordem do roadmap: a task 04 (cadastro) é o primeiro marco com dados reais; as
+  demais telas dependem dela para teste manual.
+- `git add` de arquivos específicos (nunca `-A`). Não criar PR sem pedido explícito.
