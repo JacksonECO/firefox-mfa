@@ -78,6 +78,7 @@ function ligarEventos() {
 
   $('btn-config').addEventListener('click', abrirConfig);
   $('config-voltar').addEventListener('click', abrirPrincipal);
+  $('form-sessao').addEventListener('submit', aoSalvarTimeout);
   $('form-ratelimit').addEventListener('submit', aoSalvarRateLimit);
   $('form-trocar-senha').addEventListener('submit', aoTrocarSenha);
   $('form-autofill').addEventListener('submit', aoSalvarAutofill);
@@ -413,8 +414,10 @@ async function abrirConfig() {
   $('ts-nova').value = '';
   $('ts-conf').value = '';
   limpar($('af-status'));
+  limpar($('sessao-status'));
   const resp = await enviar({ type: 'GET_CONFIG' });
   if (!resp?.ok) return;
+  $('sessao-minutos').value = (resp.sessaoTimeoutMs / 60000).toString();
   const c = resp.rateLimit;
   $('rl-livres').value = c.livres;
   $('rl-limite1').value = c.limite1;
@@ -440,6 +443,20 @@ async function aoSalvarAutofill(evento) {
   if (resp?.ok) {
     $('af-seletor').value = resp.autofill.seletor; // mostra o seletor normalizado
     dizer(status, 'Autopreenchimento salvo.');
+  } else {
+    dizer(status, 'Não foi possível salvar.');
+  }
+}
+
+async function aoSalvarTimeout(evento) {
+  evento.preventDefault();
+  const status = $('sessao-status');
+  limpar(status);
+  const ms = Math.round(Number($('sessao-minutos').value) * 60000);
+  const resp = await enviar({ type: 'SET_SESSION_TIMEOUT', ms });
+  if (resp?.ok) {
+    $('sessao-minutos').value = (resp.sessaoTimeoutMs / 60000).toString();
+    dizer(status, 'Tempo de sessão salvo.');
   } else {
     dizer(status, 'Não foi possível salvar.');
   }

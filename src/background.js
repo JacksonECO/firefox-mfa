@@ -15,6 +15,7 @@ import { gerarTOTP, segundosRestantes } from './totp.js';
 import { exportarDados, importarDados } from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
 import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
+import { normalizarTimeout, TIMEOUT_PADRAO_MS } from './sessaoconfig.js';
 
 /** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
 function metadados(mfa) {
@@ -221,7 +222,19 @@ export async function rotear(mensagem) {
       const autofill = normalizarConfigAutofill(
         (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
       );
-      return { ok: true, rateLimit, autofill };
+      const sessaoTimeoutMs = normalizarTimeout(
+        (await storage.obterTimeoutSessao()) ?? TIMEOUT_PADRAO_MS,
+      );
+      return { ok: true, rateLimit, autofill, sessaoTimeoutMs };
+    }
+
+    case 'SET_SESSION_TIMEOUT': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const ms = normalizarTimeout(mensagem.ms);
+      await storage.salvarTimeoutSessao(ms);
+      sessao.definirTimeoutMs(ms); // aplica já na sessão atual
+      return { ok: true, sessaoTimeoutMs: ms };
     }
 
     case 'SET_RATE_LIMIT': {

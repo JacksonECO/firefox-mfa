@@ -103,6 +103,19 @@
           <button class="btn-link" id="config-voltar" type="button">Voltar</button>
         </div>
 
+        <form id="form-sessao" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Tempo de sessão</h2>
+          <p class="config__ajuda">
+            Após esse tempo de inatividade, a senha mestra é exigida de novo.
+          </p>
+          <label class="field">
+            <span class="field__label">Expirar após (minutos)</span>
+            <input class="field__input" id="sessao-minutos" type="number" min="0.25" max="60" step="0.25" />
+          </label>
+          <button class="btn" type="submit">Salvar tempo de sessão</button>
+          <p class="form__status" id="sessao-status" role="status"></p>
+        </form>
+
         <form id="form-ratelimit" class="form config__bloco" novalidate>
           <h2 class="config__titulo">Proteção contra tentativas de senha</h2>
           <p class="config__ajuda">
