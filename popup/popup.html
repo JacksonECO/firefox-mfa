@@ -103,6 +103,18 @@
           <button class="btn-link" id="config-voltar" type="button">Voltar</button>
         </div>
 
+        <form id="form-geral" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Geral</h2>
+          <label class="field field--inline">
+            <input id="geral-autocopiar" type="checkbox" />
+            <span class="field__label">
+              Copiar o código automaticamente ao abrir (quando há só 1 MFA do site)
+            </span>
+          </label>
+          <button class="btn" type="submit">Salvar</button>
+          <p class="form__status" id="geral-status" role="status"></p>
+        </form>
+
         <form id="form-sessao" class="form config__bloco" novalidate>
           <h2 class="config__titulo">Tempo de sessão</h2>
           <p class="config__ajuda">

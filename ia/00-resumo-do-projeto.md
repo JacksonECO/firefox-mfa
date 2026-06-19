@@ -100,6 +100,7 @@ uma única funcionalidade.
 | 21 | [Tempo de sessão configurável](./21-tempo-de-sessao-configuravel.md) | Ajusta o tempo de relogin por inatividade |
 | 22 | [Doc do autopreenchimento](./22-doc-autopreenchimento.md) | Guia de configuração do seletor CSS |
 | 23 | [Autopreenchimento por domínio](./23-autofill-por-dominio.md) | Seletor padrão + overrides por domínio (e múltiplos) |
+| 24 | [Config da autocópia](./24-config-autocopia.md) | Liga/desliga a cópia automática ao abrir |
 
 ## Princípios que não devem ser violados em nenhuma task
 

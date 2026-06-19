@@ -225,7 +225,15 @@ export async function rotear(mensagem) {
       const sessaoTimeoutMs = normalizarTimeout(
         (await storage.obterTimeoutSessao()) ?? TIMEOUT_PADRAO_MS,
       );
-      return { ok: true, rateLimit, autofill, sessaoTimeoutMs };
+      const autocopiar = await storage.obterAutocopiar();
+      return { ok: true, rateLimit, autofill, sessaoTimeoutMs, autocopiar };
+    }
+
+    case 'SET_AUTOCOPY': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      await storage.salvarAutocopiar(mensagem.habilitado);
+      return { ok: true, autocopiar: Boolean(mensagem.habilitado) };
     }
 
     case 'SET_SESSION_TIMEOUT': {
