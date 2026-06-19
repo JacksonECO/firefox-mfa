@@ -299,6 +299,32 @@ export async function atualizarMfaSemCripto(id, { nome, dominio, secretEmClaro }
 }
 
 /**
+ * Converte um MFA de localhost-sem-cripto para criptografado (task: edição de
+ * domínio). Usado quando o domínio editado deixa de ser localhost — o registro
+ * não pode mais ficar em claro, então passa a usar `secretCriptografado`/`iv`
+ * (já cifrados pelo chamador) e descarta `secretEmClaro`/`semCriptografia`.
+ * Conversão é só nesse sentido (sem-cripto → criptografado); o inverso
+ * continua exigindo excluir e recadastrar (decisão tomada na criação).
+ */
+export async function converterMfaParaCriptografado(id, { nome, dominio, secretCriptografado, iv }) {
+  const todos = await lerTodos();
+  const indice = todos.findIndex((mfa) => mfa.id === id);
+  if (indice === -1) return null;
+  const atualizado = {
+    id: todos[indice].id,
+    nome: nome.trim(),
+    dominio: normalizarCampoDominio(dominio),
+    secretCriptografado,
+    iv,
+    createdAt: todos[indice].createdAt,
+    updatedAt: Date.now(),
+  };
+  todos[indice] = atualizado;
+  await gravarTodos(todos);
+  return atualizado;
+}
+
+/**
  * Atualiza campos de um MFA existente. Só aceita os campos da lista branca —
  * nunca um segredo em claro (que deve ser criptografado pelo chamador, task 09).
  * @returns o registro atualizado, ou `null` se o id não existir.

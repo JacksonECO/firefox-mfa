@@ -28,9 +28,10 @@ dos demais domínios.
 - Também é possível ter MFAs de localhost **com** criptografia (a opção é por cadastro).
 
 **Não entra:**
-- Converter entre com/sem criptografia na edição — o modo é definido na criação e preservado
-  (para trocar, exclua e recadastre).
-- Qualquer registro sem cripto fora de localhost (rejeitado no background).
+- Converter de criptografado para sem-cripto na edição — essa direção exige excluir e
+  recadastrar, pois a opção sem-cripto é uma escolha deliberada feita na criação.
+- Qualquer registro sem cripto fora de localhost (rejeitado no background; na criação, retorna
+  erro; na edição, ver conversão automática abaixo).
 
 ## Decisões técnicas
 
@@ -40,6 +41,11 @@ dos demais domínios.
   `GET_CODE_LOCALHOST` checam `semCriptografia === true && ehLocalhost(dominio)` — nunca tocam
   em segredo criptografado nem de outro domínio sem a senha mestra. `GET_CODE`/`REVEAL_SECRET`/
   export/import passam a tratar os dois modos.
+- **Edição de domínio de um registro sem-cripto:** se o novo domínio continuar localhost, segue
+  em claro. Se deixar de ser localhost, `UPDATE_MFA` converte automaticamente para criptografado
+  (`storage.converterMfaParaCriptografado`) em vez de bloquear a atualização — evita um MFA
+  "preso" no domínio antigo só porque mudou de ambiente. A conversão é só nesse sentido; voltar
+  a sem-cripto exige excluir e recadastrar.
 - Isolamento: toda operação que não seja o par localhost continua exigindo sessão desbloqueada
   (já garantido pelos guards existentes).
 - Documentado como **exceção única e explícita** à regra "nada sensível em claro" (CLAUDE.md).

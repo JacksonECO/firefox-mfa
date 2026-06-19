@@ -211,15 +211,28 @@ export async function rotear(mensagem) {
       const mfa = await storage.obterMfa(mensagem.id);
       if (!mfa) return { ok: false, erro: 'NAO_ENCONTRADO' };
       try {
-        // Registro sem criptografia (localhost) preserva o modo; segue em claro.
+        // Registro sem criptografia (localhost) preserva o modo enquanto o
+        // domínio continuar localhost; segue em claro.
         if (mfa.semCriptografia) {
-          if (!ehLocalhost(validacao.normalizado.dominio)) {
-            return { ok: false, erro: 'SEM_CRIPTO_SO_LOCALHOST' };
+          if (ehLocalhost(validacao.normalizado.dominio)) {
+            const atualizado = await storage.atualizarMfaSemCripto(mensagem.id, {
+              nome: validacao.normalizado.nome,
+              dominio: validacao.normalizado.dominio,
+              secretEmClaro: validacao.normalizado.secret,
+            });
+            return { ok: true, mfa: metadados(atualizado) };
           }
-          const atualizado = await storage.atualizarMfaSemCripto(mensagem.id, {
+          // O domínio deixou de ser localhost: não é mais permitido ficar em
+          // claro, então converte para criptografado (uma via só: sem-cripto
+          // → criptografado). O sentido contrário continua exigindo excluir e
+          // recadastrar, pois a opção sem-cripto é uma escolha deliberada na
+          // criação.
+          const { ciphertext, iv } = await cripto.criptografar(validacao.normalizado.secret, chave);
+          const atualizado = await storage.converterMfaParaCriptografado(mensagem.id, {
             nome: validacao.normalizado.nome,
             dominio: validacao.normalizado.dominio,
-            secretEmClaro: validacao.normalizado.secret,
+            secretCriptografado: ciphertext,
+            iv,
           });
           return { ok: true, mfa: metadados(atualizado) };
         }
