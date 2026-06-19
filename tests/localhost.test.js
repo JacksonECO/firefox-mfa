@@ -90,3 +90,43 @@ test('logado, GET_CODE e REVEAL funcionam também para o sem-cripto', async () =
   assert.match((await bg.rotear({ type: 'GET_CODE', id: local.mfa.id })).codigo, /^\d{6}$/);
   assert.equal((await bg.rotear({ type: 'REVEAL_SECRET', id: local.mfa.id })).secret, SEGREDO);
 });
+
+test('editar o domínio de um sem-cripto para fora de localhost converte para criptografado', async () => {
+  const local = await salvarSemCripto('localhost');
+
+  const r = await bg.rotear({
+    type: 'UPDATE_MFA',
+    id: local.mfa.id,
+    nome: 'Local',
+    dominio: 'github.com', // deixou de ser localhost
+    secret: SEGREDO,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.mfa.semCriptografia, false);
+  assert.equal(r.mfa.dominio, 'github.com');
+
+  // não fica mais em claro no storage
+  const cru = JSON.stringify([...globalThis.browser._dados.values()]);
+  assert.ok(!cru.includes(SEGREDO));
+
+  // continua acessível normalmente (agora exige sessão, como qualquer criptografado)
+  assert.match((await bg.rotear({ type: 'GET_CODE', id: local.mfa.id })).codigo, /^\d{6}$/);
+  assert.equal((await bg.rotear({ type: 'REVEAL_SECRET', id: local.mfa.id })).secret, SEGREDO);
+
+  // e o fluxo localhost sem sessão não vê mais esse registro
+  await bg.rotear({ type: 'LOCK' });
+  assert.equal((await bg.rotear({ type: 'LIST_LOCALHOST', dominio: 'github.com' })).mfas.length, 0);
+});
+
+test('editar domínio mantendo localhost preserva o modo sem-cripto', async () => {
+  const local = await salvarSemCripto('localhost');
+  const r = await bg.rotear({
+    type: 'UPDATE_MFA',
+    id: local.mfa.id,
+    nome: 'Local renomeado',
+    dominio: 'localhost',
+    secret: SEGREDO,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.mfa.semCriptografia, true);
+});
