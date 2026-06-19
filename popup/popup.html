@@ -96,6 +96,17 @@
         </div>
       </section>
 
+      <!-- Fluxo localhost sem senha mestra (task 26) -->
+      <section id="view-localhost" class="view" hidden>
+        <p class="principal__contexto" id="localhost-contexto"></p>
+        <p class="view__aviso">
+          Acesso local sem senha mestra. Aparecem só os MFAs de localhost cadastrados sem
+          criptografia. Entre com a senha mestra para acesso completo.
+        </p>
+        <ul class="lista" id="localhost-lista"></ul>
+        <button class="btn" id="localhost-entrar" type="button">Entrar com a senha mestra</button>
+      </section>
+
       <!-- Configurações (task 16+) -->
       <section id="view-config" class="view" hidden>
         <div class="principal__topo">
@@ -262,6 +273,13 @@
             </span>
           </label>
           <p class="field__erro" id="mfa-secret-erro" role="alert"></p>
+
+          <label class="field field--inline" id="mfa-sem-cripto-campo" hidden>
+            <input id="mfa-sem-cripto" type="checkbox" />
+            <span class="field__label">
+              Cadastrar sem criptografia (só localhost) — visível sem a senha mestra
+            </span>
+          </label>
 
           <button class="btn" type="submit">Salvar MFA</button>
           <button class="btn btn--perigo" id="btn-excluir" type="button" hidden>

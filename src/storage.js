@@ -245,6 +245,60 @@ export async function salvarMfa({ nome, dominio, secretEmClaro }, chave) {
 }
 
 /**
+ * Cria um MFA de localhost SEM criptografia (task 26). O segredo é guardado em
+ * claro — exceção restrita a localhost, decidida pelo usuário no cadastro. O
+ * chamador (background) é responsável por validar que o domínio é localhost.
+ */
+export async function salvarMfaSemCripto({ nome, dominio, secretEmClaro }) {
+  if (typeof nome !== 'string' || nome.trim() === '') {
+    throw new Error('Nome do MFA é obrigatório.');
+  }
+  if (typeof secretEmClaro !== 'string' || secretEmClaro.length === 0) {
+    throw new Error('Segredo do MFA é obrigatório.');
+  }
+  const agora = Date.now();
+  const registro = {
+    id: crypto.randomUUID(),
+    nome: nome.trim(),
+    dominio: normalizarCampoDominio(dominio),
+    secretEmClaro,
+    semCriptografia: true,
+    createdAt: agora,
+    updatedAt: agora,
+  };
+  const todos = await lerTodos();
+  todos.push(registro);
+  await gravarTodos(todos);
+  await garantirSchemaVersion();
+  return registro;
+}
+
+/** Atualiza um MFA de localhost sem criptografia, mantendo-o em claro. */
+export async function atualizarMfaSemCripto(id, { nome, dominio, secretEmClaro }) {
+  if (typeof nome !== 'string' || nome.trim() === '') {
+    throw new Error('Nome do MFA é obrigatório.');
+  }
+  if (typeof secretEmClaro !== 'string' || secretEmClaro.length === 0) {
+    throw new Error('Segredo do MFA é obrigatório.');
+  }
+  const todos = await lerTodos();
+  const indice = todos.findIndex((mfa) => mfa.id === id);
+  if (indice === -1) return null;
+  const atualizado = {
+    id: todos[indice].id,
+    nome: nome.trim(),
+    dominio: normalizarCampoDominio(dominio),
+    secretEmClaro,
+    semCriptografia: true,
+    createdAt: todos[indice].createdAt,
+    updatedAt: Date.now(),
+  };
+  todos[indice] = atualizado;
+  await gravarTodos(todos);
+  return atualizado;
+}
+
+/**
  * Atualiza campos de um MFA existente. Só aceita os campos da lista branca —
  * nunca um segredo em claro (que deve ser criptografado pelo chamador, task 09).
  * @returns o registro atualizado, ou `null` se o id não existir.

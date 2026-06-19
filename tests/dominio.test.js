@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extrairDominioDaAba, normalizarDominio } from '../src/dominio.js';
+import { extrairDominioDaAba, normalizarDominio, ehLocalhost } from '../src/dominio.js';
 
 test('URL https/http normal retorna o hostname', () => {
   assert.equal(extrairDominioDaAba({ url: 'https://github.com/login' }), 'github.com');
@@ -36,4 +36,15 @@ test('normalizarDominio: trim + minúsculo, vazio vira null', () => {
   assert.equal(normalizarDominio('   '), null);
   assert.equal(normalizarDominio(null), null);
   assert.equal(normalizarDominio(undefined), null);
+});
+
+test('ehLocalhost reconhece loopback e *.localhost; rejeita o resto', () => {
+  assert.equal(ehLocalhost('localhost'), true);
+  assert.equal(ehLocalhost('127.0.0.1'), true);
+  assert.equal(ehLocalhost('::1'), true);
+  assert.equal(ehLocalhost('app.localhost'), true);
+  assert.equal(ehLocalhost('LocalHost'), true);
+  assert.equal(ehLocalhost('github.com'), false);
+  assert.equal(ehLocalhost('notlocalhost.com'), false);
+  assert.equal(ehLocalhost(null), false);
 });

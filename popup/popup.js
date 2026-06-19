@@ -6,7 +6,7 @@
 // (textContent, nunca innerHTML). A única exceção é o REVEAL_SECRET pontual do
 // fluxo de edição, descartado do campo ao sair.
 
-import { extrairDominioDaAba } from '../src/dominio.js';
+import { extrairDominioDaAba, ehLocalhost } from '../src/dominio.js';
 import { validarCadastro } from '../src/cadastro.js';
 import { validarCadastroSenha, decidirTela } from '../src/senha.js';
 import { decidirListagem, filtrarPorDominio } from '../src/listagem.js';
@@ -20,6 +20,7 @@ const VIEWS = [
   'view-principal',
   'view-formulario',
   'view-config',
+  'view-localhost',
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -40,7 +41,8 @@ let edicaoId = null; // null = modo criar; id = modo editar
 /* ------------------------------ navegação ------------------------------ */
 
 function mostrarVista(nome) {
-  if (nome !== 'principal') pararTicker(); // só a tela principal usa o ticker
+  // O ticker é usado pela tela principal e pela tela localhost (ambas têm cards).
+  if (nome !== 'principal' && nome !== 'localhost') pararTicker();
   $('dialog-excluir').hidden = true; // o diálogo é transitório: nunca persiste entre telas
   for (const id of VIEWS) $(id).hidden = id !== `view-${nome}`;
 }
@@ -59,9 +61,32 @@ async function rotearVistaInicial() {
   } catch {
     /* background indisponível: trata como primeiro acesso */
   }
-  const tela = decidirTela({ temSenha, sessaoAtiva });
-  if (tela === 'principal') await abrirPrincipal({ autoCopiar: true });
-  else mostrarVista(tela);
+  dominioAtual = await obterDominioAtual();
+
+  if (sessaoAtiva) {
+    await abrirPrincipal({ autoCopiar: true });
+    return;
+  }
+
+  // Fluxo localhost sem senha mestra (task 26): só se houver MFAs locais sem cripto.
+  if (ehLocalhost(dominioAtual)) {
+    const locais = await enviar({ type: 'LIST_LOCALHOST', dominio: dominioAtual }).catch(() => null);
+    if (locais?.ok && locais.mfas.length > 0) {
+      abrirLocalhost(dominioAtual, locais.mfas);
+      return;
+    }
+  }
+
+  mostrarVista(decidirTela({ temSenha, sessaoAtiva })); // criar-senha ou desbloquear
+}
+
+function abrirLocalhost(dominio, mfas) {
+  mostrarVista('localhost');
+  dizer($('localhost-contexto'), `MFAs locais de ${dominio} (sem criptografia)`);
+  renderizarLista($('localhost-lista'), mfas, {
+    obterCodigo: (id) => enviar({ type: 'GET_CODE_LOCALHOST', id }),
+    aoEditar: null, // sem edição sem login
+  });
 }
 
 function ligarEventos() {
@@ -73,6 +98,8 @@ function ligarEventos() {
 
   $('btn-adicionar').addEventListener('click', () => abrirFormulario(null));
   $('btn-ver-todos').addEventListener('click', alternarVerTodos);
+  $('localhost-entrar').addEventListener('click', () => mostrarVista('desbloquear'));
+  $('mfa-dominio').addEventListener('input', atualizarOpcaoSemCripto);
 
   // Backup abre uma aba dedicada: o seletor de arquivos fecharia o popup (task 20).
   $('btn-backup').addEventListener('click', abrirBackup);
@@ -328,6 +355,8 @@ async function abrirFormulario(id) {
   limpar($('mfa-status'));
   $('mfa-secret').type = 'password';
   $('mfa-secret-toggle').textContent = 'Mostrar';
+  $('mfa-sem-cripto').checked = false;
+  $('mfa-sem-cripto').disabled = false;
   mostrarVista('formulario');
 
   if (id === null) {
@@ -337,6 +366,7 @@ async function abrirFormulario(id) {
     $('mfa-nome').value = '';
     $('mfa-secret').value = '';
     $('mfa-dominio').value = (await obterDominioAtual()) ?? '';
+    atualizarOpcaoSemCripto();
     return;
   }
 
@@ -346,9 +376,20 @@ async function abrirFormulario(id) {
   const mfa = mfasCache.find((m) => m.id === id);
   $('mfa-nome').value = mfa?.nome ?? '';
   $('mfa-dominio').value = mfa?.dominio ?? '';
-  // Pré-preenche o segredo descriptografado (exceção REVEAL_SECRET da ia/02).
+  // O modo de criptografia é definido na criação e preservado: checkbox só informativo.
+  $('mfa-sem-cripto').checked = mfa?.semCriptografia === true;
+  $('mfa-sem-cripto').disabled = true;
+  atualizarOpcaoSemCripto();
+  // Pré-preenche o segredo (exceção REVEAL_SECRET da ia/02; em claro p/ localhost).
   const resp = await enviar({ type: 'REVEAL_SECRET', id });
   $('mfa-secret').value = resp?.ok ? resp.secret : '';
+}
+
+// Mostra a opção "sem criptografia" apenas quando o domínio é localhost (task 26).
+function atualizarOpcaoSemCripto() {
+  const local = ehLocalhost($('mfa-dominio').value);
+  $('mfa-sem-cripto-campo').hidden = !local;
+  if (!local && edicaoId === null) $('mfa-sem-cripto').checked = false;
 }
 
 async function aoSalvarFormulario(evento) {
@@ -372,7 +413,8 @@ async function aoSalvarFormulario(evento) {
   }
 
   const tipo = edicaoId === null ? 'SAVE_MFA' : 'UPDATE_MFA';
-  const resp = await enviar({ type: tipo, id: edicaoId, nome, dominio, secret });
+  const semCriptografia = $('mfa-sem-cripto').checked && ehLocalhost(dominio);
+  const resp = await enviar({ type: tipo, id: edicaoId, nome, dominio, secret, semCriptografia });
   $('mfa-secret').value = ''; // descarta o segredo da UI
 
   if (resp?.ok) {
@@ -382,6 +424,8 @@ async function aoSalvarFormulario(evento) {
     if (resp.erros.secret) dizer(secretErro, resp.erros.secret);
   } else if (resp?.erro === 'SESSAO_BLOQUEADA') {
     dizer(status, 'Sessão expirada. Feche e reabra para desbloquear.');
+  } else if (resp?.erro === 'SEM_CRIPTO_SO_LOCALHOST') {
+    dizer(status, 'A opção sem criptografia só vale para localhost.');
   } else {
     dizer(status, resp?.erro ?? 'Não foi possível salvar.');
   }

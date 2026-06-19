@@ -11,6 +11,7 @@ import * as sessao from './sessao.js';
 import * as storage from './storage.js';
 import * as cripto from './crypto.js';
 import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
+import { ehLocalhost } from './dominio.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
 import { exportarDados, importarDados } from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
@@ -51,9 +52,16 @@ function metadados(mfa) {
     id: mfa.id,
     nome: mfa.nome,
     dominio: mfa.dominio,
+    semCriptografia: mfa.semCriptografia === true,
     createdAt: mfa.createdAt,
     updatedAt: mfa.updatedAt,
   };
+}
+
+/** Lê o segredo de um registro: em claro se for localhost sem cripto, senão decripta. */
+async function lerSegredo(mfa, chave) {
+  if (mfa.semCriptografia) return mfa.secretEmClaro;
+  return cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
 }
 
 /**
@@ -109,14 +117,18 @@ export async function rotear(mensagem) {
       });
       if (!validacao.valido) return { ok: false, erros: validacao.erros };
       try {
-        const registro = await storage.salvarMfa(
-          {
-            nome: validacao.normalizado.nome,
-            dominio: validacao.normalizado.dominio,
-            secretEmClaro: validacao.normalizado.secret,
-          },
-          chave,
-        );
+        const dados = {
+          nome: validacao.normalizado.nome,
+          dominio: validacao.normalizado.dominio,
+          secretEmClaro: validacao.normalizado.secret,
+        };
+        // Opção sem criptografia: estritamente para localhost (task 26).
+        if (mensagem.semCriptografia) {
+          if (!ehLocalhost(dados.dominio)) return { ok: false, erro: 'SEM_CRIPTO_SO_LOCALHOST' };
+          const registro = await storage.salvarMfaSemCripto(dados);
+          return { ok: true, mfa: metadados(registro) };
+        }
+        const registro = await storage.salvarMfa(dados, chave);
         return { ok: true, mfa: metadados(registro) };
       } catch (erro) {
         return { ok: false, erro: erro.message };
@@ -138,7 +150,7 @@ export async function rotear(mensagem) {
       try {
         // O segredo só existe em claro aqui, neste escopo, e nunca sai do
         // background: devolvemos apenas o código de 6 dígitos.
-        const segredo = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
+        const segredo = await lerSegredo(mfa, chave);
         const codigo = await gerarTOTP(segredo);
         return { ok: true, codigo, segundosRestantes: segundosRestantes(Date.now()) };
       } catch {
@@ -154,10 +166,36 @@ export async function rotear(mensagem) {
       const mfa = await storage.obterMfa(mensagem.id);
       if (!mfa) return { ok: false, erro: 'NAO_ENCONTRADO' };
       try {
-        const secret = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
+        const secret = await lerSegredo(mfa, chave);
         return { ok: true, secret };
       } catch {
         return { ok: false, erro: 'FALHA' };
+      }
+    }
+
+    // --- Fluxo localhost SEM senha mestra (task 26): só MFAs de localhost sem
+    // --- criptografia. Estritamente isolado; nada mais funciona sem desbloquear.
+    case 'LIST_LOCALHOST': {
+      if (!ehLocalhost(mensagem.dominio)) return { ok: true, mfas: [] };
+      const todos = await storage.listarMfas();
+      const locais = todos.filter(
+        (m) => m.semCriptografia === true && m.dominio === mensagem.dominio && ehLocalhost(m.dominio),
+      );
+      return { ok: true, mfas: locais.map(metadados) };
+    }
+
+    case 'GET_CODE_LOCALHOST': {
+      const mfa = await storage.obterMfa(mensagem.id);
+      // Só gera para registros de localhost SEM criptografia — nunca toca em
+      // segredo criptografado ou de outro domínio sem a senha mestra.
+      if (!mfa || mfa.semCriptografia !== true || !ehLocalhost(mfa.dominio)) {
+        return { ok: false, erro: 'NAO_PERMITIDO' };
+      }
+      try {
+        const codigo = await gerarTOTP(mfa.secretEmClaro);
+        return { ok: true, codigo, segundosRestantes: segundosRestantes(Date.now()) };
+      } catch {
+        return { ok: false, erro: 'FALHA_CODIGO' };
       }
     }
 
@@ -173,6 +211,19 @@ export async function rotear(mensagem) {
       const mfa = await storage.obterMfa(mensagem.id);
       if (!mfa) return { ok: false, erro: 'NAO_ENCONTRADO' };
       try {
+        // Registro sem criptografia (localhost) preserva o modo; segue em claro.
+        if (mfa.semCriptografia) {
+          if (!ehLocalhost(validacao.normalizado.dominio)) {
+            return { ok: false, erro: 'SEM_CRIPTO_SO_LOCALHOST' };
+          }
+          const atualizado = await storage.atualizarMfaSemCripto(mensagem.id, {
+            nome: validacao.normalizado.nome,
+            dominio: validacao.normalizado.dominio,
+            secretEmClaro: validacao.normalizado.secret,
+          });
+          return { ok: true, mfa: metadados(atualizado) };
+        }
+
         const dadosNovos = {
           nome: validacao.normalizado.nome,
           dominio: validacao.normalizado.dominio,
@@ -211,8 +262,13 @@ export async function rotear(mensagem) {
         const todos = await storage.listarMfas();
         const registros = [];
         for (const mfa of todos) {
-          const secret = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
-          registros.push({ nome: mfa.nome, dominio: mfa.dominio, secret });
+          const secret = await lerSegredo(mfa, chave);
+          registros.push({
+            nome: mfa.nome,
+            dominio: mfa.dominio,
+            secret,
+            semCriptografia: mfa.semCriptografia === true,
+          });
         }
         const configuracoes = await coletarConfiguracoes();
         const arquivo = await exportarDados(registros, configuracoes, mensagem.senha);
@@ -231,10 +287,17 @@ export async function rotear(mensagem) {
         let importados = 0;
         for (const reg of mfas) {
           if (!reg?.nome || !reg?.secret) continue;
-          await storage.salvarMfa(
-            { nome: reg.nome, dominio: reg.dominio ?? null, secretEmClaro: reg.secret },
-            chave,
-          );
+          const dados = {
+            nome: reg.nome,
+            dominio: reg.dominio ?? null,
+            secretEmClaro: reg.secret,
+          };
+          // Preserva o modo sem criptografia só se ainda for localhost.
+          if (reg.semCriptografia && ehLocalhost(dados.dominio)) {
+            await storage.salvarMfaSemCripto(dados);
+          } else {
+            await storage.salvarMfa(dados, chave);
+          }
           importados += 1;
         }
         let configImportada = false;
