@@ -18,6 +18,7 @@ const CHAVE_ULTIMA_TENTATIVA = 'mfaUnlockLastAttemptAt';
 const CHAVE_CONFIG_RATELIMIT = 'rateLimitConfig';
 const CHAVE_CONFIG_AUTOFILL = 'autofillConfig';
 const CHAVE_TIMEOUT_SESSAO = 'sessionTimeoutMs';
+const CHAVE_AUTOCOPIAR = 'autocopiarHabilitado';
 const SCHEMA_ATUAL = 1;
 
 // Migrações de schema (task 11). Vazio hoje (só existe a v1). Cada migração
@@ -153,6 +154,17 @@ export async function obterTimeoutSessao() {
 
 export async function salvarTimeoutSessao(ms) {
   await area().set({ [CHAVE_TIMEOUT_SESSAO]: ms });
+}
+
+/** Autocópia ligada? Padrão: ligada (comportamento original da task 15). */
+export async function obterAutocopiar() {
+  const dados = await area().get(CHAVE_AUTOCOPIAR);
+  const v = dados[CHAVE_AUTOCOPIAR];
+  return typeof v === 'boolean' ? v : true;
+}
+
+export async function salvarAutocopiar(habilitado) {
+  await area().set({ [CHAVE_AUTOCOPIAR]: Boolean(habilitado) });
 }
 
 /* -------------------------------- MFAs (task 03) ----------------------------- */

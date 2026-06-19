@@ -79,6 +79,7 @@ function ligarEventos() {
 
   $('btn-config').addEventListener('click', abrirConfig);
   $('config-voltar').addEventListener('click', abrirPrincipal);
+  $('form-geral').addEventListener('submit', aoSalvarGeral);
   $('form-sessao').addEventListener('submit', aoSalvarTimeout);
   $('form-ratelimit').addEventListener('submit', aoSalvarRateLimit);
   $('form-trocar-senha').addEventListener('submit', aoTrocarSenha);
@@ -176,17 +177,28 @@ async function abrirPrincipal({ autoCopiar = false } = {}) {
 // só com 1 MFA do domínio.
 async function autocopiarSeUnico(decisao) {
   if (decisao.modo !== 'dominio' || decisao.itens.length !== 1) return;
+  let config = {};
+  try {
+    config = (await enviar({ type: 'GET_CONFIG' })) ?? {};
+  } catch {
+    /* ignora; usa padrões */
+  }
   const resp = await enviar({ type: 'GET_CODE', id: decisao.itens[0].id });
   if (!resp?.ok) return;
+
   let copiou = false;
-  try {
-    await copiarParaClipboard(resp.codigo);
-    copiou = true;
-  } catch {
-    /* clipboard indisponível: silencioso, o usuário ainda pode clicar */
+  if (config.autocopiar !== false) {
+    // padrão: ligado (task 24)
+    try {
+      await copiarParaClipboard(resp.codigo);
+      copiou = true;
+    } catch {
+      /* clipboard indisponível: silencioso, o usuário ainda pode clicar */
+    }
   }
-  const preencheu = await preencherNaAba(resp.codigo);
-  if (preencheu) dizer($('principal-aviso'), 'Código copiado e preenchido na página ✓');
+  const preencheu = await preencherNaAba(config.autofill, resp.codigo);
+  if (preencheu && copiou) dizer($('principal-aviso'), 'Código copiado e preenchido na página ✓');
+  else if (preencheu) dizer($('principal-aviso'), 'Código preenchido na página ✓');
   else if (copiou) dizer($('principal-aviso'), 'Código copiado automaticamente ✓');
 }
 
@@ -229,13 +241,7 @@ function preencherCamposOtp(seletor, codigo) {
 }
 
 /** Injeta o código na aba ativa, se o autopreenchimento estiver habilitado. */
-async function preencherNaAba(codigo) {
-  let cfg;
-  try {
-    cfg = (await enviar({ type: 'GET_CONFIG' }))?.autofill;
-  } catch {
-    return false;
-  }
+async function preencherNaAba(cfg, codigo) {
   if (!cfg?.habilitado || !browser.scripting?.executeScript) return false;
   const seletor = resolverSeletor(cfg, dominioAtual);
   if (!seletor) return false;
@@ -419,8 +425,10 @@ async function abrirConfig() {
   $('ts-conf').value = '';
   limpar($('af-status'));
   limpar($('sessao-status'));
+  limpar($('geral-status'));
   const resp = await enviar({ type: 'GET_CONFIG' });
   if (!resp?.ok) return;
+  $('geral-autocopiar').checked = resp.autocopiar !== false;
   $('sessao-minutos').value = (resp.sessaoTimeoutMs / 60000).toString();
   const c = resp.rateLimit;
   $('rl-livres').value = c.livres;
@@ -494,6 +502,14 @@ async function aoSalvarAutofill(evento) {
   } else {
     dizer(status, 'Não foi possível salvar.');
   }
+}
+
+async function aoSalvarGeral(evento) {
+  evento.preventDefault();
+  const status = $('geral-status');
+  limpar(status);
+  const resp = await enviar({ type: 'SET_AUTOCOPY', habilitado: $('geral-autocopiar').checked });
+  dizer(status, resp?.ok ? 'Configuração salva.' : 'Não foi possível salvar.');
 }
 
 async function aoSalvarTimeout(evento) {
