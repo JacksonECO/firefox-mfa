@@ -165,3 +165,31 @@ test('IMPORT_DATA com senha errada não importa nada', async () => {
   assert.equal(imp.ok, false);
   assert.equal((await bg.rotear({ type: 'LIST_MFAS' })).mfas.length, 0);
 });
+
+test('EXPORT_DATA inclui as configurações atuais; IMPORT_DATA pode aplicá-las', async () => {
+  await salvar('GitHub', 'github.com');
+  await bg.rotear({ type: 'SET_AUTOCOPY', habilitado: false });
+  await bg.rotear({ type: 'SET_SESSION_TIMEOUT', ms: 90000 });
+  const exp = await bg.rotear({ type: 'EXPORT_DATA', senha: 'backup' });
+
+  // Cofre novo com configurações padrão
+  globalThis.browser = criarBrowserMock();
+  await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'nova' });
+  assert.equal((await bg.rotear({ type: 'GET_CONFIG' })).autocopiar, true); // padrão
+
+  // Importa SEM aplicar config
+  await bg.rotear({ type: 'IMPORT_DATA', arquivo: exp.arquivo, senha: 'backup' });
+  assert.equal((await bg.rotear({ type: 'GET_CONFIG' })).autocopiar, true); // inalterado
+
+  // Importa COM aplicar config
+  const imp = await bg.rotear({
+    type: 'IMPORT_DATA',
+    arquivo: exp.arquivo,
+    senha: 'backup',
+    importarConfig: true,
+  });
+  assert.equal(imp.configImportada, true);
+  const cfg = await bg.rotear({ type: 'GET_CONFIG' });
+  assert.equal(cfg.autocopiar, false);
+  assert.equal(cfg.sessaoTimeoutMs, 90000);
+});
