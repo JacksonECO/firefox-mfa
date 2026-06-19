@@ -59,6 +59,34 @@ test('nova senha curta é rejeitada', async () => {
   assert.equal(r.erro, 'SENHA_NOVA_INVALIDA');
 });
 
+test('trocar senha funciona com MFA de localhost sem criptografia presente', async () => {
+  // Regressão: trocarSenhaMestra não pode tentar decifrar um registro sem cripto.
+  await bg.rotear({
+    type: 'SAVE_MFA',
+    nome: 'Local',
+    dominio: 'localhost',
+    secret: SEGREDO,
+    semCriptografia: true,
+  });
+  const cripto = await bg.rotear({ type: 'SAVE_MFA', nome: 'Cripto', dominio: 'g.com', secret: SEGREDO });
+
+  const troca = await bg.rotear({
+    type: 'CHANGE_MASTER_PASSWORD',
+    senhaAtual: 'senha-antiga-1',
+    senhaNova: 'senha-nova-2',
+  });
+  assert.equal(troca.ok, true);
+
+  // o local sem cripto continua acessível sem sessão; o criptografado segue íntegro
+  await bg.rotear({ type: 'LOCK' });
+  const locais = await bg.rotear({ type: 'LIST_LOCALHOST', dominio: 'localhost' });
+  assert.equal(locais.mfas.length, 1);
+  assert.match((await bg.rotear({ type: 'GET_CODE_LOCALHOST', id: locais.mfas[0].id })).codigo, /^\d{6}$/);
+
+  assert.equal((await bg.rotear({ type: 'UNLOCK', senha: 'senha-nova-2' })).ok, true);
+  assert.equal((await bg.rotear({ type: 'REVEAL_SECRET', id: cripto.mfa.id })).secret, SEGREDO);
+});
+
 test('CHANGE_MASTER_PASSWORD exige sessão desbloqueada', async () => {
   await bg.rotear({ type: 'LOCK' });
   const r = await bg.rotear({

@@ -127,10 +127,16 @@ export async function trocarSenhaMestra(senhaAtual, senhaNova) {
   const novaChave = await cripto.derivarChave(senhaNova, novoSalt);
 
   // Recifra cada segredo: decripta com a chave antiga, cifra com a nova (novo IV).
+  // Registros de localhost SEM criptografia (task 26) não dependem da chave —
+  // mantém-se como estão (não têm secretCriptografado/iv para decifrar).
   const todos = await storage.listarMfas();
   const agora = Date.now();
   const recifrados = [];
   for (const mfa of todos) {
+    if (mfa.semCriptografia) {
+      recifrados.push(mfa);
+      continue;
+    }
     const segredo = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chaveAtual);
     const { ciphertext, iv } = await cripto.criptografar(segredo, novaChave);
     recifrados.push({ ...mfa, secretCriptografado: ciphertext, iv, updatedAt: agora });
