@@ -59,10 +59,12 @@ step: o código é carregado direto.
    exportação (independente da senha mestra) e baixe o arquivo `.json` criptografado. Para
    restaurar (no mesmo Firefox ou em outro), use **"Importar"**, selecione o arquivo e informe
    a senha de exportação.
-8. **Configurações.** Em **"Configurações"** (rodapé da tela principal) você pode: ajustar a
-   proteção contra tentativas de senha (atrasos), **trocar a senha mestra** (recriptografa
-   tudo) e habilitar o **autopreenchimento** — informando um seletor CSS do campo de código do
-   site para que, com 1 MFA, o código seja inserido e enviado automaticamente.
+8. **Configurações.** Em **"Configurações"** (rodapé da tela principal) você pode: ajustar o
+   tempo de sessão, a proteção contra tentativas de senha (atrasos), **trocar a senha mestra**
+   (recriptografa tudo) e habilitar o **autopreenchimento** — informando um seletor CSS do
+   campo de código do site para que, com 1 MFA, o código seja inserido e enviado
+   automaticamente. Como configurar o seletor: veja
+   [`docs/autopreenchimento.md`](./docs/autopreenchimento.md).
 
 ## Estrutura do projeto
 

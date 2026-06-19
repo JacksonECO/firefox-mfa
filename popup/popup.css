@@ -270,6 +270,14 @@ body.pagina {
   color: var(--color-muted);
 }
 
+.config__ajuda code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+}
+
 /* Card */
 
 .card {
