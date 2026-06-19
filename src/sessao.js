@@ -9,9 +9,13 @@ import * as cripto from './crypto.js';
 import * as storage from './storage.js';
 import { calcularAtraso, normalizarConfigRateLimit } from './ratelimit.js';
 import { TAMANHO_MINIMO_SENHA } from './senha.js';
+import { TIMEOUT_PADRAO_MS, normalizarTimeout } from './sessaoconfig.js';
 
-const TIMEOUT_MS = 2 * 60 * 1000; // expira após 2 min de inatividade
 const NOME_ALARME = 'firefox-mfa-expiracao-sessao';
+
+// Timeout de inatividade (configurável, task 21). Carregado do storage ao
+// desbloquear; mantido em memória para que `estaDesbloqueado` (síncrono) o use.
+let timeoutMs = TIMEOUT_PADRAO_MS;
 
 /** Espera real (sobreponível nos testes para não atrasar de verdade). */
 const esperaReal = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
@@ -21,7 +25,17 @@ const esperaReal = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Pro
 let chaveEmMemoria = null;
 let ultimaAtividade = 0;
 
-export { TIMEOUT_MS, NOME_ALARME };
+export { NOME_ALARME };
+
+/** Define o timeout de inatividade em memória (chamado ao salvar a config). */
+export function definirTimeoutMs(ms) {
+  timeoutMs = normalizarTimeout(ms);
+}
+
+/** Carrega o timeout salvo (ou o padrão) para a memória. */
+async function carregarTimeout() {
+  timeoutMs = normalizarTimeout((await storage.obterTimeoutSessao()) ?? TIMEOUT_PADRAO_MS);
+}
 
 /** Há senha mestra já cadastrada? (delega ao storage). */
 export async function estaInicializado() {
@@ -44,6 +58,7 @@ export async function definirSenhaMestra(senha) {
   const controle = await cripto.criptografar(cripto.VALOR_CONTROLE, chave);
   await storage.salvarSalt(salt);
   await storage.salvarValorControle(controle);
+  await carregarTimeout();
   ativarSessao(chave);
   return true;
 }
@@ -81,6 +96,7 @@ export async function desbloquear(senha, { esperar = esperaReal } = {}) {
     return false;
   }
   await storage.resetarTentativas(); // acerto: zera a fricção
+  await carregarTimeout();
   ativarSessao(chave);
   return true;
 }
@@ -141,7 +157,7 @@ export function registrarAtividade() {
 /** A sessão está ativa e dentro da janela de 2 minutos? Não conta como interação. */
 export function estaDesbloqueado() {
   if (!chaveEmMemoria) return false;
-  if (Date.now() - ultimaAtividade > TIMEOUT_MS) {
+  if (Date.now() - ultimaAtividade > timeoutMs) {
     bloquear();
     return false;
   }
@@ -170,7 +186,7 @@ function agendarExpiracao() {
   // Nome de alarme fixo ⇒ recriar substitui o agendamento anterior. Garante
   // que múltiplas interações/checagens não acumulem alarmes duplicados.
   globalThis.browser?.alarms?.create(NOME_ALARME, {
-    delayInMinutes: TIMEOUT_MS / 60_000,
+    delayInMinutes: timeoutMs / 60_000,
   });
 }
 

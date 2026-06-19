@@ -17,6 +17,7 @@ const CHAVE_TENTATIVAS = 'mfaUnlockAttempts';
 const CHAVE_ULTIMA_TENTATIVA = 'mfaUnlockLastAttemptAt';
 const CHAVE_CONFIG_RATELIMIT = 'rateLimitConfig';
 const CHAVE_CONFIG_AUTOFILL = 'autofillConfig';
+const CHAVE_TIMEOUT_SESSAO = 'sessionTimeoutMs';
 const SCHEMA_ATUAL = 1;
 
 // Migrações de schema (task 11). Vazio hoje (só existe a v1). Cada migração
@@ -141,6 +142,17 @@ export async function obterConfigAutofill() {
 
 export async function salvarConfigAutofill(config) {
   await area().set({ [CHAVE_CONFIG_AUTOFILL]: config });
+}
+
+/** Timeout de inatividade da sessão (ms), ou null se nunca salvo. */
+export async function obterTimeoutSessao() {
+  const dados = await area().get(CHAVE_TIMEOUT_SESSAO);
+  const ms = dados[CHAVE_TIMEOUT_SESSAO];
+  return typeof ms === 'number' ? ms : null;
+}
+
+export async function salvarTimeoutSessao(ms) {
+  await area().set({ [CHAVE_TIMEOUT_SESSAO]: ms });
 }
 
 /* -------------------------------- MFAs (task 03) ----------------------------- */

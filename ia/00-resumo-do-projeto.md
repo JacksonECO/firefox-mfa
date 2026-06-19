@@ -97,6 +97,7 @@ uma única funcionalidade.
 | 18 | [Autopreenchimento na página](./18-autopreenchimento-na-pagina.md) | Insere o código no campo do site (opt-in, via seletor) |
 | 19 | [Correção: overlay preso na 1ª abertura](./19-fix-overlay-hidden.md) | `[hidden]` deixava de esconder diálogos/feedback |
 | 20 | [Correção: importação em aba dedicada](./20-fix-importacao-aba.md) | Seletor de arquivo fechava o popup; backup vai p/ aba |
+| 21 | [Tempo de sessão configurável](./21-tempo-de-sessao-configuravel.md) | Ajusta o tempo de relogin por inatividade |
 
 ## Princípios que não devem ser violados em nenhuma task
 
