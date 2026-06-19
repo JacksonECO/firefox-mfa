@@ -3,29 +3,46 @@ import assert from 'node:assert/strict';
 import { criarBrowserMock } from './_mocks.js';
 import {
   normalizarConfigAutofill,
+  resolverSeletor,
   SELETOR_OTP_PADRAO,
   AUTOFILL_PADRAO,
 } from '../src/autofill.js';
 
 test('AUTOFILL_PADRAO vem desligado (opt-in) com o seletor OTP padrão', () => {
   assert.equal(AUTOFILL_PADRAO.habilitado, false);
-  assert.equal(AUTOFILL_PADRAO.seletor, SELETOR_OTP_PADRAO);
+  assert.equal(AUTOFILL_PADRAO.seletorPadrao, SELETOR_OTP_PADRAO);
+  assert.deepEqual(AUTOFILL_PADRAO.porDominio, {});
 });
 
 test('normalizarConfigAutofill coage habilitado e usa o padrão p/ seletor vazio', () => {
-  assert.deepEqual(normalizarConfigAutofill({ habilitado: 1, seletor: '  ' }), {
+  assert.deepEqual(normalizarConfigAutofill({ habilitado: 1, seletorPadrao: '  ' }), {
     habilitado: true,
-    seletor: SELETOR_OTP_PADRAO,
-  });
-  assert.deepEqual(normalizarConfigAutofill({}), {
-    habilitado: false,
-    seletor: SELETOR_OTP_PADRAO,
+    seletorPadrao: SELETOR_OTP_PADRAO,
+    porDominio: {},
   });
 });
 
-test('normalizarConfigAutofill preserva um seletor customizado (trim)', () => {
-  const c = normalizarConfigAutofill({ habilitado: true, seletor: '  #otp input  ' });
-  assert.equal(c.seletor, '#otp input');
+test('migra o formato antigo `seletor` para `seletorPadrao`', () => {
+  const c = normalizarConfigAutofill({ habilitado: true, seletor: '#otp' });
+  assert.equal(c.seletorPadrao, '#otp');
+});
+
+test('normaliza domínios (minúsculo/trim) e descarta entradas vazias', () => {
+  const c = normalizarConfigAutofill({
+    porDominio: { ' GitHub.com ': ' #code ', 'vazio.com': '', '': '#x' },
+  });
+  assert.deepEqual(c.porDominio, { 'github.com': '#code' });
+});
+
+test('resolverSeletor: override por domínio, senão o padrão', () => {
+  const config = {
+    habilitado: true,
+    seletorPadrao: '#padrao',
+    porDominio: { 'github.com': '#gh' },
+  };
+  assert.equal(resolverSeletor(config, 'github.com'), '#gh');
+  assert.equal(resolverSeletor(config, 'outro.com'), '#padrao');
+  assert.equal(resolverSeletor(config, null), '#padrao');
 });
 
 /* ------------------------- integração no background ------------------------- */
@@ -40,13 +57,24 @@ beforeEach(async () => {
 
 test('GET_CONFIG inclui autofill (padrão na 1ª vez)', async () => {
   const r = await bg.rotear({ type: 'GET_CONFIG' });
-  assert.deepEqual(r.autofill, { habilitado: false, seletor: SELETOR_OTP_PADRAO });
+  assert.deepEqual(r.autofill, {
+    habilitado: false,
+    seletorPadrao: SELETOR_OTP_PADRAO,
+    porDominio: {},
+  });
 });
 
-test('SET_AUTOFILL persiste e GET_CONFIG reflete', async () => {
-  await bg.rotear({ type: 'SET_AUTOFILL', config: { habilitado: true, seletor: '#code' } });
+test('SET_AUTOFILL persiste seletor padrão e por domínio', async () => {
+  await bg.rotear({
+    type: 'SET_AUTOFILL',
+    config: { habilitado: true, seletorPadrao: '#code', porDominio: { 'a.com': '.x' } },
+  });
   const r = await bg.rotear({ type: 'GET_CONFIG' });
-  assert.deepEqual(r.autofill, { habilitado: true, seletor: '#code' });
+  assert.deepEqual(r.autofill, {
+    habilitado: true,
+    seletorPadrao: '#code',
+    porDominio: { 'a.com': '.x' },
+  });
 });
 
 test('SET_AUTOFILL exige sessão desbloqueada', async () => {
