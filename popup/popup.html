@@ -177,6 +177,10 @@
           <p class="config__ajuda">
             Quando houver só 1 MFA para o site, insere o código no campo indicado e tenta
             confirmar com Enter. Só o código (nunca o segredo) é inserido na página.
+            O seletor CSS aponta o(s) campo(s) de código — ex.: <code>#otp</code>,
+            <code>input[name="code"]</code> ou <code>input[autocomplete="one-time-code"]</code>.
+            Para 6 caixas separadas, use um seletor que case os 6 inputs (ex.:
+            <code>.otp-box</code>). Guia completo em docs/autopreenchimento.md.
           </p>
           <label class="field field--inline">
             <input id="af-habilitado" type="checkbox" />

@@ -98,6 +98,7 @@ uma única funcionalidade.
 | 19 | [Correção: overlay preso na 1ª abertura](./19-fix-overlay-hidden.md) | `[hidden]` deixava de esconder diálogos/feedback |
 | 20 | [Correção: importação em aba dedicada](./20-fix-importacao-aba.md) | Seletor de arquivo fechava o popup; backup vai p/ aba |
 | 21 | [Tempo de sessão configurável](./21-tempo-de-sessao-configuravel.md) | Ajusta o tempo de relogin por inatividade |
+| 22 | [Doc do autopreenchimento](./22-doc-autopreenchimento.md) | Guia de configuração do seletor CSS |
 
 ## Princípios que não devem ser violados em nenhuma task
 
