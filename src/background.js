@@ -17,6 +17,34 @@ import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
 import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
 import { normalizarTimeout, TIMEOUT_PADRAO_MS } from './sessaoconfig.js';
 
+/** Coleta as configurações atuais (não sensíveis) para exportar. */
+async function coletarConfiguracoes() {
+  return {
+    rateLimit: normalizarConfigRateLimit((await storage.obterConfigRateLimit()) ?? RATE_LIMIT_PADRAO),
+    autofill: normalizarConfigAutofill((await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO),
+    sessaoTimeoutMs: normalizarTimeout((await storage.obterTimeoutSessao()) ?? TIMEOUT_PADRAO_MS),
+    autocopiar: await storage.obterAutocopiar(),
+  };
+}
+
+/** Aplica configurações vindas de um backup (revalidando cada uma). */
+async function aplicarConfiguracoes(cfg) {
+  if (cfg.rateLimit) {
+    await storage.salvarConfigRateLimit(normalizarConfigRateLimit(cfg.rateLimit));
+  }
+  if (cfg.autofill) {
+    await storage.salvarConfigAutofill(normalizarConfigAutofill(cfg.autofill));
+  }
+  if (typeof cfg.sessaoTimeoutMs !== 'undefined') {
+    const ms = normalizarTimeout(cfg.sessaoTimeoutMs);
+    await storage.salvarTimeoutSessao(ms);
+    sessao.definirTimeoutMs(ms);
+  }
+  if (typeof cfg.autocopiar === 'boolean') {
+    await storage.salvarAutocopiar(cfg.autocopiar);
+  }
+}
+
 /** Extrai só os metadados não sensíveis de um registro (nunca o segredo). */
 function metadados(mfa) {
   return {
@@ -186,7 +214,8 @@ export async function rotear(mensagem) {
           const secret = await cripto.descriptografar(mfa.secretCriptografado, mfa.iv, chave);
           registros.push({ nome: mfa.nome, dominio: mfa.dominio, secret });
         }
-        const arquivo = await exportarDados(registros, mensagem.senha);
+        const configuracoes = await coletarConfiguracoes();
+        const arquivo = await exportarDados(registros, configuracoes, mensagem.senha);
         return { ok: true, arquivo };
       } catch (erro) {
         return { ok: false, erro: erro.message };
@@ -197,10 +226,10 @@ export async function rotear(mensagem) {
       const chave = sessao.obterChave();
       if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
       try {
-        const registros = await importarDados(mensagem.arquivo, mensagem.senha);
+        const { mfas, configuracoes } = await importarDados(mensagem.arquivo, mensagem.senha);
         // Re-criptografa cada registro com a chave local e acrescenta ao cofre.
         let importados = 0;
-        for (const reg of registros) {
+        for (const reg of mfas) {
           if (!reg?.nome || !reg?.secret) continue;
           await storage.salvarMfa(
             { nome: reg.nome, dominio: reg.dominio ?? null, secretEmClaro: reg.secret },
@@ -208,7 +237,12 @@ export async function rotear(mensagem) {
           );
           importados += 1;
         }
-        return { ok: true, importados };
+        let configImportada = false;
+        if (mensagem.importarConfig && configuracoes) {
+          await aplicarConfiguracoes(configuracoes);
+          configImportada = true;
+        }
+        return { ok: true, importados, configImportada };
       } catch {
         return { ok: false, erro: 'SENHA_OU_ARQUIVO_INVALIDO' };
       }

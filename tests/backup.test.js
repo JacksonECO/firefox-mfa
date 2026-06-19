@@ -7,23 +7,34 @@ const REGISTROS = [
   { nome: 'Sem domínio', dominio: null, secret: 'GEZDGNBVGY3TQOJQ' },
 ];
 
-test('round-trip: exportar e importar com a senha correta devolve os mesmos dados', async () => {
-  const arquivo = await exportarDados(REGISTROS, 'senha-de-export');
+const CONFIG = { autocopiar: false, sessaoTimeoutMs: 60000 };
+
+test('round-trip: exportar/importar devolve MFAs e configurações', async () => {
+  const arquivo = await exportarDados(REGISTROS, CONFIG, 'senha-de-export');
   const volta = await importarDados(arquivo, 'senha-de-export');
-  assert.deepEqual(volta, REGISTROS);
+  assert.deepEqual(volta.mfas, REGISTROS);
+  assert.deepEqual(volta.configuracoes, CONFIG);
 });
 
-test('o arquivo exportado não contém segredo nem domínio em claro', async () => {
-  const arquivo = await exportarDados(REGISTROS, 'senha-de-export');
+test('exportar sem configurações devolve configuracoes null', async () => {
+  const arquivo = await exportarDados(REGISTROS, null, 'senha-de-export');
+  const volta = await importarDados(arquivo, 'senha-de-export');
+  assert.equal(volta.configuracoes, null);
+  assert.deepEqual(volta.mfas, REGISTROS);
+});
+
+test('o arquivo exportado não contém segredo, domínio nem config em claro', async () => {
+  const arquivo = await exportarDados(REGISTROS, CONFIG, 'senha-de-export');
   const json = JSON.stringify(arquivo);
   assert.ok(!json.includes('JBSWY3DPEHPK3PXP'));
   assert.ok(!json.includes('GEZDGNBVGY3TQOJQ'));
   assert.ok(!json.includes('github.com'));
+  assert.ok(!json.includes('sessaoTimeoutMs'));
   assert.equal(arquivo.formato, 'firefox-mfa-export');
 });
 
 test('importar com senha errada falha claramente, sem expor dados', async () => {
-  const arquivo = await exportarDados(REGISTROS, 'senha-certa');
+  const arquivo = await exportarDados(REGISTROS, null, 'senha-certa');
   await assert.rejects(() => importarDados(arquivo, 'senha-errada'), /incorreta/);
 });
 
@@ -33,5 +44,5 @@ test('arquivo inválido é rejeitado', async () => {
 });
 
 test('senha de exportação vazia é rejeitada', async () => {
-  await assert.rejects(() => exportarDados(REGISTROS, ''));
+  await assert.rejects(() => exportarDados(REGISTROS, null, ''));
 });

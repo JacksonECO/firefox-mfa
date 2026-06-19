@@ -101,6 +101,7 @@ uma única funcionalidade.
 | 22 | [Doc do autopreenchimento](./22-doc-autopreenchimento.md) | Guia de configuração do seletor CSS |
 | 23 | [Autopreenchimento por domínio](./23-autofill-por-dominio.md) | Seletor padrão + overrides por domínio (e múltiplos) |
 | 24 | [Config da autocópia](./24-config-autocopia.md) | Liga/desliga a cópia automática ao abrir |
+| 25 | [Exportar/importar configurações](./25-importar-configuracoes.md) | Backup inclui ajustes; importar é opcional |
 
 ## Princípios que não devem ser violados em nenhuma task
 
