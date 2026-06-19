@@ -99,6 +99,7 @@ uma única funcionalidade.
 | 20 | [Correção: importação em aba dedicada](./20-fix-importacao-aba.md) | Seletor de arquivo fechava o popup; backup vai p/ aba |
 | 21 | [Tempo de sessão configurável](./21-tempo-de-sessao-configuravel.md) | Ajusta o tempo de relogin por inatividade |
 | 22 | [Doc do autopreenchimento](./22-doc-autopreenchimento.md) | Guia de configuração do seletor CSS |
+| 23 | [Autopreenchimento por domínio](./23-autofill-por-dominio.md) | Seletor padrão + overrides por domínio (e múltiplos) |
 
 ## Princípios que não devem ser violados em nenhuma task
 

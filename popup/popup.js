@@ -11,6 +11,7 @@ import { validarCadastro } from '../src/cadastro.js';
 import { validarCadastroSenha, decidirTela } from '../src/senha.js';
 import { decidirListagem, filtrarPorDominio } from '../src/listagem.js';
 import { codigoParaCopia } from '../src/codigo.js';
+import { resolverSeletor } from '../src/autofill.js';
 import { renderizarLista, pararTicker, copiarParaClipboard } from './cards.js';
 
 const VIEWS = [
@@ -82,6 +83,7 @@ function ligarEventos() {
   $('form-ratelimit').addEventListener('submit', aoSalvarRateLimit);
   $('form-trocar-senha').addEventListener('submit', aoTrocarSenha);
   $('form-autofill').addEventListener('submit', aoSalvarAutofill);
+  $('af-add-dominio').addEventListener('click', () => adicionarLinhaDominio('', ''));
 
   $('form-mfa').addEventListener('submit', aoSalvarFormulario);
   $('form-voltar').addEventListener('click', abrirPrincipal);
@@ -234,14 +236,16 @@ async function preencherNaAba(codigo) {
   } catch {
     return false;
   }
-  if (!cfg?.habilitado || !cfg.seletor || !browser.scripting?.executeScript) return false;
+  if (!cfg?.habilitado || !browser.scripting?.executeScript) return false;
+  const seletor = resolverSeletor(cfg, dominioAtual);
+  if (!seletor) return false;
   try {
     const [aba] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!aba?.id) return false;
     const [res] = await browser.scripting.executeScript({
       target: { tabId: aba.id },
       func: preencherCamposOtp,
-      args: [cfg.seletor, codigoParaCopia(codigo)],
+      args: [seletor, codigoParaCopia(codigo)],
     });
     return res?.result?.ok === true;
   } catch {
@@ -428,20 +432,64 @@ async function abrirConfig() {
 
   const af = resp.autofill ?? {};
   $('af-habilitado').checked = Boolean(af.habilitado);
-  $('af-seletor').value = af.seletor ?? '';
+  $('af-seletor-padrao').value = af.seletorPadrao ?? '';
+  $('af-dominios').replaceChildren();
+  for (const [dominio, seletor] of Object.entries(af.porDominio ?? {})) {
+    adicionarLinhaDominio(dominio, seletor);
+  }
+}
+
+// Cria uma linha editável de "domínio → seletor". Tudo via DOM API (sem innerHTML).
+function adicionarLinhaDominio(dominio, seletor) {
+  const linha = document.createElement('div');
+  linha.className = 'af-linha';
+
+  const inputDom = document.createElement('input');
+  inputDom.type = 'text';
+  inputDom.className = 'field__input af-linha__dom';
+  inputDom.placeholder = 'domínio (ex: github.com)';
+  inputDom.spellcheck = false;
+  inputDom.value = dominio;
+
+  const inputSel = document.createElement('input');
+  inputSel.type = 'text';
+  inputSel.className = 'field__input af-linha__sel';
+  inputSel.placeholder = 'seletor CSS';
+  inputSel.spellcheck = false;
+  inputSel.value = seletor;
+
+  const remover = document.createElement('button');
+  remover.type = 'button';
+  remover.className = 'btn-link af-linha__rm';
+  remover.textContent = 'remover';
+  remover.addEventListener('click', () => linha.remove());
+
+  linha.append(inputDom, inputSel, remover);
+  $('af-dominios').append(linha);
 }
 
 async function aoSalvarAutofill(evento) {
   evento.preventDefault();
   const status = $('af-status');
   limpar(status);
+
+  const porDominio = {};
+  for (const linha of $('af-dominios').querySelectorAll('.af-linha')) {
+    const dom = linha.querySelector('.af-linha__dom').value.trim().toLowerCase();
+    const sel = linha.querySelector('.af-linha__sel').value.trim();
+    if (dom !== '' && sel !== '') porDominio[dom] = sel;
+  }
+
   const config = {
     habilitado: $('af-habilitado').checked,
-    seletor: $('af-seletor').value,
+    seletorPadrao: $('af-seletor-padrao').value,
+    porDominio,
   };
   const resp = await enviar({ type: 'SET_AUTOFILL', config });
   if (resp?.ok) {
-    $('af-seletor').value = resp.autofill.seletor; // mostra o seletor normalizado
+    $('af-seletor-padrao').value = resp.autofill.seletorPadrao;
+    $('af-dominios').replaceChildren();
+    for (const [d, s] of Object.entries(resp.autofill.porDominio)) adicionarLinhaDominio(d, s);
     dizer(status, 'Autopreenchimento salvo.');
   } else {
     dizer(status, 'Não foi possível salvar.');

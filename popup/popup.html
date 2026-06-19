@@ -187,15 +187,18 @@
             <span class="field__label">Habilitar autopreenchimento</span>
           </label>
           <label class="field">
-            <span class="field__label">Seletor CSS do(s) campo(s) de código</span>
+            <span class="field__label">Seletor CSS padrão</span>
             <input
               class="field__input"
-              id="af-seletor"
+              id="af-seletor-padrao"
               type="text"
               spellcheck="false"
               placeholder="input[autocomplete=&quot;one-time-code&quot;]"
             />
           </label>
+          <span class="field__label">Seletores por domínio (opcional)</span>
+          <div id="af-dominios"></div>
+          <button class="btn-link" id="af-add-dominio" type="button">+ Adicionar domínio</button>
           <button class="btn" type="submit">Salvar autopreenchimento</button>
           <p class="form__status" id="af-status" role="status"></p>
         </form>
