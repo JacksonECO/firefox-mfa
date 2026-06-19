@@ -30,6 +30,14 @@ body {
   padding: var(--space-4);
 }
 
+/* Layout de página inteira (aba de backup, task 20) em vez do popup estreito. */
+body.pagina {
+  width: auto;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+
 .app__header {
   display: flex;
   align-items: center;

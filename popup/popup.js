@@ -18,8 +18,6 @@ const VIEWS = [
   'view-desbloquear',
   'view-principal',
   'view-formulario',
-  'view-exportar',
-  'view-importar',
   'view-config',
 ];
 
@@ -75,12 +73,8 @@ function ligarEventos() {
   $('btn-adicionar').addEventListener('click', () => abrirFormulario(null));
   $('btn-ver-todos').addEventListener('click', alternarVerTodos);
 
-  $('btn-exportar').addEventListener('click', () => mostrarVista('exportar'));
-  $('btn-importar').addEventListener('click', () => mostrarVista('importar'));
-  $('exportar-voltar').addEventListener('click', abrirPrincipal);
-  $('importar-voltar').addEventListener('click', abrirPrincipal);
-  $('form-exportar').addEventListener('submit', aoExportar);
-  $('form-importar').addEventListener('submit', aoImportar);
+  // Backup abre uma aba dedicada: o seletor de arquivos fecharia o popup (task 20).
+  $('btn-backup').addEventListener('click', abrirBackup);
 
   $('btn-config').addEventListener('click', abrirConfig);
   $('config-voltar').addEventListener('click', abrirPrincipal);
@@ -400,75 +394,11 @@ async function confirmarExclusao() {
   else dizer($('mfa-status'), 'Não foi possível excluir.');
 }
 
-/* --------------------------- exportar / importar --------------------------- */
+/* --------------------------------- backup --------------------------------- */
 
-async function aoExportar(evento) {
-  evento.preventDefault();
-  const erro = $('exportar-erro');
-  const status = $('exportar-status');
-  limpar(erro);
-  limpar(status);
-
-  const senha = $('exportar-senha').value;
-  if (senha === '') {
-    dizer(erro, 'Informe uma senha de exportação.');
-    return;
-  }
-  const resp = await enviar({ type: 'EXPORT_DATA', senha });
-  $('exportar-senha').value = '';
-  if (!resp?.ok) {
-    dizer(erro, resp?.erro === 'SESSAO_BLOQUEADA' ? 'Sessão expirada.' : 'Falha ao exportar.');
-    return;
-  }
-  baixarJson(resp.arquivo, 'firefox-mfa-backup.json');
-  dizer(status, 'Backup baixado.');
-}
-
-function baixarJson(objeto, nomeArquivo) {
-  const blob = new Blob([JSON.stringify(objeto)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = nomeArquivo;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-async function aoImportar(evento) {
-  evento.preventDefault();
-  const erro = $('importar-erro');
-  const status = $('importar-status');
-  limpar(erro);
-  limpar(status);
-
-  const arquivoInput = $('importar-arquivo');
-  const senha = $('importar-senha').value;
-  if (!arquivoInput.files || arquivoInput.files.length === 0) {
-    dizer(erro, 'Selecione um arquivo de backup.');
-    return;
-  }
-  if (senha === '') {
-    dizer(erro, 'Informe a senha de exportação.');
-    return;
-  }
-
-  let arquivo;
-  try {
-    arquivo = JSON.parse(await arquivoInput.files[0].text());
-  } catch {
-    dizer(erro, 'Arquivo inválido (não é um JSON válido).');
-    return;
-  }
-
-  const resp = await enviar({ type: 'IMPORT_DATA', arquivo, senha });
-  $('importar-senha').value = '';
-  if (resp?.ok) {
-    dizer(status, `Importado(s) ${resp.importados} MFA(s).`);
-  } else if (resp?.erro === 'SESSAO_BLOQUEADA') {
-    dizer(erro, 'Sessão expirada.');
-  } else {
-    dizer(erro, 'Senha incorreta ou arquivo inválido.');
-  }
+function abrirBackup() {
+  // Página dedicada em aba: o seletor de arquivos não destrói o contexto.
+  browser.tabs.create({ url: browser.runtime.getURL('popup/backup.html') });
 }
 
 /* ------------------------------ configurações ------------------------------ */

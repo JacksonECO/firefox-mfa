@@ -92,8 +92,7 @@
 
         <div class="rodape">
           <button class="btn-link" id="btn-config" type="button">Configurações</button>
-          <button class="btn-link" id="btn-exportar" type="button">Exportar</button>
-          <button class="btn-link" id="btn-importar" type="button">Importar</button>
+          <button class="btn-link" id="btn-backup" type="button">Backup</button>
         </div>
       </section>
 
@@ -182,58 +181,6 @@
           </label>
           <button class="btn" type="submit">Salvar autopreenchimento</button>
           <p class="form__status" id="af-status" role="status"></p>
-        </form>
-      </section>
-
-      <!-- Exportar backup criptografado (task 14) -->
-      <section id="view-exportar" class="view" hidden>
-        <div class="principal__topo">
-          <p class="view__desc">Exportar backup</p>
-          <button class="btn-link" id="exportar-voltar" type="button">Voltar</button>
-        </div>
-        <form id="form-exportar" class="form" novalidate>
-          <p class="view__desc">
-            Defina uma senha de exportação (independente da senha mestra). Ela protege o
-            arquivo e será exigida para importar.
-          </p>
-          <label class="field">
-            <span class="field__label">Senha de exportação</span>
-            <input
-              class="field__input"
-              id="exportar-senha"
-              type="password"
-              autocomplete="new-password"
-            />
-          </label>
-          <p class="field__erro" id="exportar-erro" role="alert"></p>
-          <button class="btn" type="submit">Baixar arquivo de backup</button>
-          <p class="form__status" id="exportar-status" role="status"></p>
-        </form>
-      </section>
-
-      <!-- Importar backup criptografado (task 14) -->
-      <section id="view-importar" class="view" hidden>
-        <div class="principal__topo">
-          <p class="view__desc">Importar backup</p>
-          <button class="btn-link" id="importar-voltar" type="button">Voltar</button>
-        </div>
-        <form id="form-importar" class="form" novalidate>
-          <label class="field">
-            <span class="field__label">Arquivo de backup (.json)</span>
-            <input class="field__input" id="importar-arquivo" type="file" accept="application/json,.json" />
-          </label>
-          <label class="field">
-            <span class="field__label">Senha de exportação</span>
-            <input
-              class="field__input"
-              id="importar-senha"
-              type="password"
-              autocomplete="off"
-            />
-          </label>
-          <p class="field__erro" id="importar-erro" role="alert"></p>
-          <button class="btn" type="submit">Importar</button>
-          <p class="form__status" id="importar-status" role="status"></p>
         </form>
       </section>
 

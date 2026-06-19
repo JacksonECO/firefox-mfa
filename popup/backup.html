@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firefox MFA — Backup</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body class="pagina">
+    <main class="app">
+      <header class="app__header">
+        <h1 class="app__title">Firefox MFA — Backup</h1>
+      </header>
+
+      <p class="view__desc" id="bloqueado-aviso" hidden>
+        A sessão está bloqueada. Abra a extensão (ícone na barra) e desbloqueie com a senha
+        mestra; depois recarregue esta página.
+      </p>
+
+      <div id="backup-conteudo" hidden>
+        <form id="form-exportar" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Exportar backup</h2>
+          <p class="config__ajuda">
+            Defina uma senha de exportação (independente da senha mestra). Ela protege o arquivo
+            e será exigida para importar.
+          </p>
+          <label class="field">
+            <span class="field__label">Senha de exportação</span>
+            <input class="field__input" id="exportar-senha" type="password" autocomplete="new-password" />
+          </label>
+          <p class="field__erro" id="exportar-erro" role="alert"></p>
+          <button class="btn" type="submit">Baixar arquivo de backup</button>
+          <p class="form__status" id="exportar-status" role="status"></p>
+        </form>
+
+        <form id="form-importar" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Importar backup</h2>
+          <label class="field">
+            <span class="field__label">Arquivo de backup (.json)</span>
+            <input class="field__input" id="importar-arquivo" type="file" accept="application/json,.json" />
+          </label>
+          <label class="field">
+            <span class="field__label">Senha de exportação</span>
+            <input class="field__input" id="importar-senha" type="password" autocomplete="off" />
+          </label>
+          <label class="field field--inline">
+            <input id="importar-config" type="checkbox" />
+            <span class="field__label">Importar também as configurações</span>
+          </label>
+          <p class="field__erro" id="importar-erro" role="alert"></p>
+          <button class="btn" type="submit">Importar</button>
+          <p class="form__status" id="importar-status" role="status"></p>
+        </form>
+      </div>
+    </main>
+    <script type="module" src="backup.js"></script>
+  </body>
+</html>

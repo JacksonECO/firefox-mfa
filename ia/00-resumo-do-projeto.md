@@ -96,6 +96,7 @@ uma única funcionalidade.
 | 17 | [Trocar a senha mestra](./17-trocar-senha-mestra.md) | Re-deriva a chave e recriptografa todos os segredos |
 | 18 | [Autopreenchimento na página](./18-autopreenchimento-na-pagina.md) | Insere o código no campo do site (opt-in, via seletor) |
 | 19 | [Correção: overlay preso na 1ª abertura](./19-fix-overlay-hidden.md) | `[hidden]` deixava de esconder diálogos/feedback |
+| 20 | [Correção: importação em aba dedicada](./20-fix-importacao-aba.md) | Seletor de arquivo fechava o popup; backup vai p/ aba |
 
 ## Princípios que não devem ser violados em nenhuma task
 
