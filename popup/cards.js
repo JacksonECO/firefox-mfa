@@ -119,7 +119,12 @@ function criarCard(template, mfa, { obterCodigo, aoEditar }) {
     }
   });
 
-  el.querySelector('.card__editar').addEventListener('click', () => aoEditar(mfa.id));
+  const botaoEditar = el.querySelector('.card__editar');
+  if (typeof aoEditar === 'function') {
+    botaoEditar.addEventListener('click', () => aoEditar(mfa.id));
+  } else {
+    botaoEditar.hidden = true; // sem edição (ex: fluxo localhost sem login)
+  }
   return controlador;
 }
 

@@ -51,6 +51,11 @@ nenhuma task** — uma mudança que comprometa qualquer uma delas está errada:
 1. **Nada sensível em disco ou na rede.** Senha mestra, segredo TOTP em claro e a `CryptoKey`
    derivada **nunca** são persistidos nem transmitidos. Em storage só vão: salt, valor de
    controle criptografado, segredos criptografados (AES-GCM) e metadados não sensíveis.
+   **Exceção única e explícita (task 26):** MFAs de **localhost** podem ser cadastrados, por
+   opção do usuário no cadastro, **sem criptografia** (`secretEmClaro` + `semCriptografia:true`)
+   — isso libera vê-los sem a senha mestra, mas é estritamente isolado a localhost (validado no
+   background) e nunca se aplica a outros domínios. É um trade-off de conveniência de dev, não
+   o caminho padrão.
 2. **Toda crypto vive no `background.js`.** Todo código que toca a senha mestra, a `CryptoKey`
    ou um segredo em claro roda **exclusivamente** no service worker. O popup só troca mensagens
    (`UNLOCK`, `LIST_MFAS`, `GET_CODE`, `SAVE_MFA`, `REVEAL_SECRET`) — nunca recebe a chave nem

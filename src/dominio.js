@@ -33,3 +33,17 @@ export function normalizarDominio(valor) {
   const limpo = valor.trim().toLowerCase();
   return limpo === '' ? null : limpo;
 }
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * É um domínio de loopback/localhost? Usado para liberar o fluxo de MFAs sem
+ * criptografia (task 26), estritamente isolado a esses hosts.
+ * @param {unknown} dominio
+ * @returns {boolean}
+ */
+export function ehLocalhost(dominio) {
+  if (typeof dominio !== 'string') return false;
+  const d = dominio.trim().toLowerCase();
+  return LOOPBACK.has(d) || d.endsWith('.localhost');
+}
