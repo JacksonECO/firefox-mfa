@@ -1,4 +1,4 @@
-# Firefox MFA
+# MFA Num Toque
 
 Extensão (plug-in) para **Firefox** que gerencia códigos **MFA / TOTP** (RFC 6238),
 substituindo apps de autenticação externos. Dois diferenciais norteiam o produto:
@@ -23,7 +23,7 @@ step: o código é carregado direto.
 1. Abra o **Firefox** e digite na barra de endereço: `about:debugging#/runtime/this-firefox`
 2. Clique em **"Carregar extensão temporária…"**.
 3. Navegue até a pasta deste repositório e selecione o arquivo **`manifest.json`**.
-4. Pronto: o ícone do **Firefox MFA** aparece na barra de ferramentas. Se não aparecer, abra
+4. Pronto: o ícone do **MFA Num Toque** aparece na barra de ferramentas. Se não aparecer, abra
    o menu de extensões (ícone de peça de quebra-cabeça) e fixe-o.
 
 > A instalação temporária some ao **fechar o Firefox** — repita os passos a cada sessão. Se

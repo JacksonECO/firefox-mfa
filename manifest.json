@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Firefox MFA",
+  "name": "MFA Num Toque",
   "version": "0.1.0",
   "description": "Gerenciador local de códigos MFA (TOTP), com foco no domínio atual e segredos sempre criptografados em repouso.",
   "browser_specific_settings": {
@@ -21,7 +21,7 @@
     "scripting"
   ],
   "action": {
-    "default_title": "Firefox MFA",
+    "default_title": "MFA Num Toque",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "48": "icons/icon.svg",
