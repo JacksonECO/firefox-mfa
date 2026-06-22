@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Múltiplos seletores por vírgula — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>8. Múltiplos seletores separados por vírgula</h1>
+        <p class="subtitulo">
+          Uma config só que tenta vários formatos. Útil para reaproveitar o mesmo seletor padrão
+          em sites diferentes. Aqui o campo só tem <code>name="code"</code>.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[autocomplete="one-time-code"], #otp, input[name="code"]</code>
+        </div>
+        <div class="acoes">
+          <button
+            class="btn"
+            type="button"
+            data-copiar='input[autocomplete="one-time-code"], #otp, input[name="code"]'
+          >
+            Copiar seletor
+          </button>
+        </div>
+        <p class="dica">
+          O <code>querySelectorAll</code> casa a <strong>união</strong> de todos os seletores. Os
+          dois primeiros não existem nesta página; o terceiro (<code>input[name="code"]</code>)
+          casa <strong>1 elemento</strong> → o código inteiro vai nele, com
+          <code>input</code>/<code>change</code> e <code>Enter</code>.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <label class="campo-rotulo" for="campo-multi">Código de verificação</label>
+          <input
+            class="entrada"
+            id="campo-multi"
+            name="code"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="000000"
+          />
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite e aperte <strong>Enter</strong> — um modal mostra o
+          resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

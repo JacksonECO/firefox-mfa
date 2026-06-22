@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>6 caixas com id token-input-token-N — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>10. Outro esquema de <code>id</code> sequencial</h1>
+        <p class="subtitulo">
+          Igual ao exemplo 9, mas com outro prefixo: de <code>token-input-token-0</code> a
+          <code>token-input-token-5</code>. Serve para testar uma config que cobre
+          <strong>dois esquemas de id ao mesmo tempo</strong>.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[id^="token-input-token-"]</code>
+          <button class="btn" type="button" data-copiar='input[id^="token-input-token-"]'>
+            Copiar
+          </button>
+        </div>
+        <p class="dica">
+          Sozinho, este seletor de prefixo casa as 6 caixas desta página (modo "um dígito por
+          caixa").
+        </p>
+
+        <h2>Cobrir os dois esquemas com uma config só</h2>
+        <p class="dica">
+          Para a mesma configuração funcionar tanto aqui quanto no exemplo 9
+          (<code>token-input-mfa-…</code>), combine os dois prefixos com <strong>vírgula</strong>
+          — o <code>querySelectorAll</code> casa a união:
+        </p>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[id^="token-input-mfa-"], input[id^="token-input-token-"]</code>
+          <button
+            class="btn"
+            type="button"
+            data-copiar='input[id^="token-input-mfa-"], input[id^="token-input-token-"]'
+          >
+            Copiar combinado
+          </button>
+        </div>
+        <p class="aviso">
+          Em uma página de login real só um dos esquemas existe, então o combinado casa exatamente
+          as 6 caixas presentes. Use o seletor combinado como padrão (ou por domínio).
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <span class="campo-rotulo">Digite o código de 6 dígitos</span>
+          <div class="caixas">
+            <input class="caixa" id="token-input-token-0" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 1" />
+            <input class="caixa" id="token-input-token-1" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2" />
+            <input class="caixa" id="token-input-token-2" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3" />
+            <input class="caixa" id="token-input-token-3" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4" />
+            <input class="caixa" id="token-input-token-4" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 5" />
+            <input class="caixa" id="token-input-token-5" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 6" />
+          </div>
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite (o foco avança sozinho) e aperte
+          <strong>Enter</strong> — um modal mostra o resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

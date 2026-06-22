@@ -8,7 +8,13 @@
 
 import { extrairDominioDaAba, ehLocalhost } from '../src/dominio.js';
 import { validarCadastro } from '../src/cadastro.js';
-import { validarCadastroSenha, decidirTela } from '../src/senha.js';
+import {
+  validarCadastroSenha,
+  decidirTela,
+  avaliarForcaSenha,
+  CRITERIOS_FORCA,
+  TAMANHO_MINIMO_SENHA,
+} from '../src/senha.js';
 import { decidirListagem, filtrarPorDominio } from '../src/listagem.js';
 import { codigoParaCopia } from '../src/codigo.js';
 import { resolverSeletor } from '../src/autofill.js';
@@ -45,11 +51,40 @@ function mostrarVista(nome) {
   if (nome !== 'principal' && nome !== 'localhost') pararTicker();
   $('dialog-excluir').hidden = true; // o diálogo é transitório: nunca persiste entre telas
   for (const id of VIEWS) $(id).hidden = id !== `view-${nome}`;
+  // Foca o campo inicial da tela (ex.: senha mestra), se a tela marcar um. Como as
+  // telas começam ocultas, o atributo HTML `autofocus` não dispara — focamos aqui.
+  $(`view-${nome}`).querySelector('[data-autofocus]')?.focus();
 }
 
 async function iniciar() {
+  manterSessaoViva();
   ligarEventos();
   await rotearVistaInicial();
+}
+
+// Mantém a sessão viva enquanto o popup está aberto. Uma porta de longa duração
+// avisa o background na abertura (connect) e no fechamento (disconnect) do popup,
+// para o timer de inatividade só começar a contar depois que o popup fecha — assim
+// o usuário pode demorar preenchendo um cadastro sem a sessão expirar. Guardamos a
+// referência para a porta não ser coletada antes da hora.
+let portaKeepalive = null;
+function manterSessaoViva() {
+  try {
+    portaKeepalive = browser.runtime.connect({ name: 'popup-keepalive' });
+  } catch {
+    portaKeepalive = null; // sem porta: volta ao comportamento por inatividade
+  }
+}
+
+// Avisa o background que houve atividade (digitação no cadastro) para resetar o
+// relógio de inatividade. Com throttle (no máx. 1 a cada 15s) para não mandar uma
+// mensagem por tecla. Funciona mesmo se a porta de keep-alive não tiver conectado.
+let ultimoPingAtividade = 0;
+function registrarAtividadeDigitando() {
+  const agora = Date.now();
+  if (agora - ultimoPingAtividade < 15_000) return;
+  ultimoPingAtividade = agora;
+  enviar({ type: 'PING' }).catch(() => {});
 }
 
 async function rotearVistaInicial() {
@@ -92,6 +127,13 @@ function abrirLocalhost(dominio, mfas) {
 function ligarEventos() {
   $('form-criar-senha').addEventListener('submit', aoCriarSenha);
   $('form-desbloquear').addEventListener('submit', aoDesbloquear);
+  // Indicador de força (informativo) atualizado ao digitar a nova senha.
+  $('criar-senha').addEventListener('input', () =>
+    renderizarForcaSenha($('criar-senha-forca'), $('criar-senha').value),
+  );
+  $('ts-nova').addEventListener('input', () =>
+    renderizarForcaSenha($('ts-forca'), $('ts-nova').value),
+  );
   $('desbloquear-toggle').addEventListener('click', () =>
     alternarVisibilidade('desbloquear-senha', 'desbloquear-toggle'),
   );
@@ -114,6 +156,9 @@ function ligarEventos() {
   $('af-add-dominio').addEventListener('click', () => adicionarLinhaDominio('', ''));
 
   $('form-mfa').addEventListener('submit', aoSalvarFormulario);
+  // Digitar no cadastro (inclui o campo do segredo) também conta como atividade:
+  // reforça o keep-alive da porta avisando o background a cada trecho digitado.
+  $('form-mfa').addEventListener('input', registrarAtividadeDigitando);
   $('form-voltar').addEventListener('click', abrirPrincipal);
   $('mfa-secret-toggle').addEventListener('click', () =>
     alternarVisibilidade('mfa-secret', 'mfa-secret-toggle'),
@@ -132,6 +177,62 @@ function alternarVisibilidade(idInput, idBotao) {
 }
 
 /* ------------------------------ senha mestra ------------------------------ */
+
+// Indicador de força da senha (informativo): barra, rótulo do nível e a lista dos
+// 5 critérios. Tudo via DOM API (textContent), nunca innerHTML. O cadastro não é
+// bloqueado por aqui — só o tamanho mínimo (validarCadastroSenha) é obrigatório.
+function renderizarForcaSenha(container, senha) {
+  const aval = avaliarForcaSenha(senha);
+  container.replaceChildren();
+  if (senha === '') {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+
+  const cabecalho = document.createElement('div');
+  cabecalho.className = 'forca__cabecalho';
+
+  const barra = document.createElement('div');
+  barra.className = 'forca__barra';
+  const preenchida = document.createElement('span');
+  preenchida.className = 'forca__preenchida';
+  preenchida.dataset.nivel = String(aval.nivel);
+  preenchida.style.width = `${(aval.pontos / CRITERIOS_FORCA.length) * 100}%`;
+  barra.append(preenchida);
+
+  const nivel = document.createElement('span');
+  nivel.className = 'forca__nivel';
+  nivel.dataset.nivel = String(aval.nivel);
+  nivel.textContent = aval.rotulo;
+
+  cabecalho.append(barra, nivel);
+  container.append(cabecalho);
+
+  const lista = document.createElement('ul');
+  lista.className = 'forca__criterios';
+  for (const { chave, rotulo } of CRITERIOS_FORCA) {
+    const item = document.createElement('li');
+    item.className = 'forca__criterio';
+    const ok = aval.criterios[chave];
+    item.dataset.ok = ok ? 'sim' : 'nao';
+    const marca = document.createElement('span');
+    marca.className = 'forca__marca';
+    marca.textContent = ok ? '✓' : '○';
+    const texto = document.createElement('span');
+    texto.textContent = rotulo;
+    item.append(marca, texto);
+    lista.append(item);
+  }
+  container.append(lista);
+
+  if (!aval.atendeMinimo) {
+    const minimo = document.createElement('p');
+    minimo.className = 'forca__minimo';
+    minimo.textContent = `Mínimo de ${TAMANHO_MINIMO_SENHA} caracteres (obrigatório).`;
+    container.append(minimo);
+  }
+}
 
 async function aoCriarSenha(evento) {
   evento.preventDefault();
@@ -152,6 +253,7 @@ async function aoCriarSenha(evento) {
   const resp = await enviar({ type: 'SET_MASTER_PASSWORD', senha });
   $('criar-senha').value = '';
   $('criar-senha-conf').value = '';
+  renderizarForcaSenha($('criar-senha-forca'), '');
   if (resp?.ok) await abrirPrincipal({ autoCopiar: true });
   else dizer(senhaErro, resp?.erro ?? 'Não foi possível criar a senha.');
 }
@@ -197,12 +299,15 @@ async function abrirPrincipal({ autoCopiar = false } = {}) {
   }
   mfasCache = resp.mfas;
   const decisao = renderizarPrincipal();
-  if (autoCopiar) await autocopiarSeUnico(decisao);
+  if (autoCopiar) await executarAcoesAoAbrir(decisao);
 }
 
-// Autocópia (task 15) + autopreenchimento (task 18): só na abertura do popup e
-// só com 1 MFA do domínio.
-async function autocopiarSeUnico(decisao) {
+// Ações automáticas "ao abrir": autocópia (task 15) + autopreenchimento (task 18) +
+// fechar-ao-preencher. É o ponto ÚNICO dessas ações — chamado tanto ao abrir já
+// desbloqueado (sessão ativa) quanto logo após desbloquear com a senha mestra, ambos
+// via abrirPrincipal({ autoCopiar: true }). Assim, qualquer regra de abertura nova
+// adicionada aqui passa a valer para os dois fluxos. Só age com 1 MFA do domínio.
+async function executarAcoesAoAbrir(decisao) {
   if (decisao.modo !== 'dominio' || decisao.itens.length !== 1) return;
   let config = {};
   try {
@@ -227,6 +332,9 @@ async function autocopiarSeUnico(decisao) {
   if (preencheu && copiou) dizer($('principal-aviso'), 'Código copiado e preenchido na página ✓');
   else if (preencheu) dizer($('principal-aviso'), 'Código preenchido na página ✓');
   else if (copiou) dizer($('principal-aviso'), 'Código copiado automaticamente ✓');
+
+  // Fecha o popup sozinho quando o autopreenchimento der certo (opção opt-in).
+  if (preencheu && config.autofill?.fecharAoPreencher) window.close();
 }
 
 // Função INJETADA na página (roda no contexto da aba, não no popup). Precisa ser
@@ -467,6 +575,7 @@ async function abrirConfig() {
   $('ts-atual').value = '';
   $('ts-nova').value = '';
   $('ts-conf').value = '';
+  renderizarForcaSenha($('ts-forca'), '');
   limpar($('af-status'));
   limpar($('sessao-status'));
   limpar($('geral-status'));
@@ -484,6 +593,7 @@ async function abrirConfig() {
 
   const af = resp.autofill ?? {};
   $('af-habilitado').checked = Boolean(af.habilitado);
+  $('af-fechar').checked = Boolean(af.fecharAoPreencher);
   $('af-seletor-padrao').value = af.seletorPadrao ?? '';
   $('af-dominios').replaceChildren();
   for (const [dominio, seletor] of Object.entries(af.porDominio ?? {})) {
@@ -535,6 +645,7 @@ async function aoSalvarAutofill(evento) {
   const config = {
     habilitado: $('af-habilitado').checked,
     seletorPadrao: $('af-seletor-padrao').value,
+    fecharAoPreencher: $('af-fechar').checked,
     porDominio,
   };
   const resp = await enviar({ type: 'SET_AUTOFILL', config });
@@ -627,6 +738,7 @@ async function aoTrocarSenha(evento) {
   $('ts-atual').value = '';
   $('ts-nova').value = '';
   $('ts-conf').value = '';
+  renderizarForcaSenha($('ts-forca'), '');
   if (resp?.ok) {
     dizer(status, 'Senha alterada com sucesso.');
   } else if (resp?.erro === 'SENHA_ATUAL_INCORRETA') {

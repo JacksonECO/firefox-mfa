@@ -32,8 +32,9 @@ step: o código é carregado direto.
 ## Como usar (passo a passo)
 
 1. **Primeiro acesso — criar a senha mestra.** Clique no ícone da extensão. Defina uma senha
-   mestra (mínimo 8 caracteres) e confirme. Ela protege todos os seus códigos e **não pode ser
-   recuperada** se esquecida — guarde-a bem.
+   mestra (mínimo 3 caracteres; um indicador mostra a força com base em tamanho, maiúsculas,
+   minúsculas, números e caracteres especiais) e confirme. Ela protege todos os seus códigos e
+   **não pode ser recuperada** se esquecida — guarde-a bem.
 2. **Cadastrar um MFA.** Na tela principal, clique em **"+ Adicionar novo"**. Preencha:
    - **Nome** (obrigatório): ex. "GitHub".
    - **Site (domínio)** (opcional): já vem pré-preenchido com o domínio da aba atual; pode

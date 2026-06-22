@@ -25,6 +25,13 @@ const esperaReal = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Pro
 let chaveEmMemoria = null;
 let ultimaAtividade = 0;
 
+// Enquanto o popup está aberto, a sessão NÃO expira por inatividade — o usuário
+// pode demorar preenchendo um cadastro sem mandar mensagens ao background. O timer
+// de 2 min só (re)começa quando o popup fecha. Controlado por uma porta de longa
+// duração (runtime.connect) que o popup abre ao carregar e que se desconecta ao
+// fechar (ver marcarPopupAberto / marcarPopupFechado).
+let popupAberto = false;
+
 export { NOME_ALARME };
 
 /** Define o timeout de inatividade em memória (chamado ao salvar a config). */
@@ -148,26 +155,54 @@ export async function trocarSenhaMestra(senhaAtual, senhaNova) {
   return { ok: true };
 }
 
-/** Ativa a sessão com uma chave já derivada e (re)inicia o timer. */
+/** Ativa a sessão com uma chave já derivada e (re)inicia o timer + keep-alive. */
 export function ativarSessao(chave) {
   chaveEmMemoria = chave;
-  registrarAtividade();
+  registrarAtividade(); // já (re)inicia o keep-alive
 }
 
-/** Marca atividade: atualiza o relógio de inatividade e reagenda a expiração. */
+/**
+ * Marca atividade: atualiza o relógio de inatividade. Reagenda a expiração quando
+ * o popup está fechado; com o popup aberto, cancela qualquer expiração pendente —
+ * a sessão fica viva enquanto o popup estiver aberto.
+ */
 export function registrarAtividade() {
   ultimaAtividade = Date.now();
-  agendarExpiracao();
+  if (popupAberto) cancelarExpiracao();
+  else agendarExpiracao();
+  iniciarKeepalive(); // garante o heartbeat ativo p/ a janela atual (idempotente)
 }
 
-/** A sessão está ativa e dentro da janela de 2 minutos? Não conta como interação. */
+/**
+ * A sessão está ativa e dentro da janela de 2 minutos? Não conta como interação.
+ * Enquanto o popup está aberto, a inatividade não é considerada (não expira).
+ */
 export function estaDesbloqueado() {
   if (!chaveEmMemoria) return false;
-  if (Date.now() - ultimaAtividade > timeoutMs) {
+  if (!popupAberto && Date.now() - ultimaAtividade > timeoutMs) {
     bloquear();
     return false;
   }
   return true;
+}
+
+/**
+ * Sinaliza que o popup abriu (porta de longa duração conectada): mantém a sessão
+ * viva, suspendendo a expiração por inatividade enquanto estiver aberto.
+ */
+export function marcarPopupAberto() {
+  popupAberto = true;
+  ultimaAtividade = Date.now();
+  cancelarExpiracao();
+}
+
+/**
+ * Sinaliza que o popup fechou (porta desconectada): reinicia a janela de
+ * inatividade do zero, de forma que o tempo só passa a contar após o fechamento.
+ */
+export function marcarPopupFechado() {
+  popupAberto = false;
+  if (chaveEmMemoria) registrarAtividade();
 }
 
 /**
@@ -181,11 +216,12 @@ export function obterChave() {
   return chaveEmMemoria;
 }
 
-/** Apaga a chave da memória e cancela a expiração. */
+/** Apaga a chave da memória, cancela a expiração e para o keep-alive. */
 export function bloquear() {
   chaveEmMemoria = null;
   ultimaAtividade = 0;
   cancelarExpiracao();
+  pararKeepalive();
 }
 
 function agendarExpiracao() {
@@ -198,4 +234,46 @@ function agendarExpiracao() {
 
 function cancelarExpiracao() {
   globalThis.browser?.alarms?.clear(NOME_ALARME);
+}
+
+// Heartbeat para manter o background (event page do Firefox) vivo enquanto a sessão
+// deve durar. Com o popup fechado, o Firefox suspende o background em ~30s e a chave
+// em memória se perderia ANTES do timeout configurado (que é em minutos). A cada 20s
+// tocamos uma API do browser para resetar a ociosidade do worker — até a janela de
+// inatividade acabar, quando a sessão expira normalmente. `alarms` não resolveria:
+// eles reiniciam o worker (sem a chave), em vez de mantê-lo vivo.
+const INTERVALO_KEEPALIVE_MS = 20_000;
+// O Firefox suspende o event page após ~30s ociosos. Por isso paramos o heartbeat
+// quando faltam <= 30s para o timeout: o worker suspende naturalmente ~30s após o
+// último toque, bem no fim da janela — sem manter o background além do configurado.
+const MARGEM_SUSPENSAO_MS = 30_000;
+let timerKeepalive = null;
+
+function iniciarKeepalive() {
+  if (timerKeepalive !== null) return; // já ativo (idempotente)
+  // Sem a API (ex.: testes/Node) não há worker para manter vivo.
+  if (!globalThis.browser?.runtime?.getPlatformInfo) return;
+  timerKeepalive = setInterval(() => {
+    if (!estaDesbloqueado()) {
+      pararKeepalive(); // janela esgotada (já bloqueou) ou sessão encerrada
+      return;
+    }
+    if (popupAberto) return; // popup aberto: a porta já segura o worker
+    const restante = timeoutMs - (Date.now() - ultimaAtividade);
+    if (restante <= MARGEM_SUSPENSAO_MS) {
+      // Faltam <= 30s: para de bater e deixa o Firefox suspender o worker ~no fim
+      // da janela, em vez de mantê-lo vivo +30s além do timeout configurado.
+      pararKeepalive();
+      return;
+    }
+    globalThis.browser.runtime.getPlatformInfo().catch(() => {});
+  }, INTERVALO_KEEPALIVE_MS);
+  timerKeepalive?.unref?.(); // não segura o processo nos testes (no-op no browser)
+}
+
+function pararKeepalive() {
+  if (timerKeepalive !== null) {
+    clearInterval(timerKeepalive);
+    timerKeepalive = null;
+  }
 }

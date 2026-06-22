@@ -459,3 +459,101 @@ body.pagina {
 .dialog__acoes .btn {
   margin-top: 0;
 }
+
+/* Indicador de força da senha (informativo) — cadastro e troca de senha */
+
+.forca {
+  margin: 0 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.forca__cabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.forca__barra {
+  flex: 1;
+  height: 6px;
+  background: var(--color-secondary);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.forca__preenchida {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--color-muted);
+  transition: width var(--transicao), background var(--transicao);
+}
+
+.forca__preenchida[data-nivel='0'],
+.forca__preenchida[data-nivel='1'] {
+  background: var(--color-danger-text);
+}
+.forca__preenchida[data-nivel='2'] {
+  background: var(--color-warning);
+}
+.forca__preenchida[data-nivel='3'],
+.forca__preenchida[data-nivel='4'] {
+  background: var(--color-success);
+}
+
+.forca__nivel {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+.forca__nivel[data-nivel='0'],
+.forca__nivel[data-nivel='1'] {
+  color: var(--color-danger-text);
+}
+.forca__nivel[data-nivel='2'] {
+  color: var(--color-warning);
+}
+.forca__nivel[data-nivel='3'],
+.forca__nivel[data-nivel='4'] {
+  color: var(--color-success);
+}
+
+.forca__criterios {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--fs-small);
+}
+
+.forca__criterio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+}
+
+.forca__criterio[data-ok='sim'] {
+  color: var(--color-text);
+}
+
+.forca__marca {
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+}
+
+.forca__criterio[data-ok='sim'] .forca__marca {
+  color: var(--color-success);
+}
+
+.forca__minimo {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--color-warning);
+}

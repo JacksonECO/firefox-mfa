@@ -11,6 +11,7 @@ import {
 test('AUTOFILL_PADRAO vem desligado (opt-in) com o seletor OTP padrão', () => {
   assert.equal(AUTOFILL_PADRAO.habilitado, false);
   assert.equal(AUTOFILL_PADRAO.seletorPadrao, SELETOR_OTP_PADRAO);
+  assert.equal(AUTOFILL_PADRAO.fecharAoPreencher, false);
   assert.deepEqual(AUTOFILL_PADRAO.porDominio, {});
 });
 
@@ -18,8 +19,15 @@ test('normalizarConfigAutofill coage habilitado e usa o padrão p/ seletor vazio
   assert.deepEqual(normalizarConfigAutofill({ habilitado: 1, seletorPadrao: '  ' }), {
     habilitado: true,
     seletorPadrao: SELETOR_OTP_PADRAO,
+    fecharAoPreencher: false,
     porDominio: {},
   });
+});
+
+test('normalizarConfigAutofill coage fecharAoPreencher para booleano', () => {
+  assert.equal(normalizarConfigAutofill({ fecharAoPreencher: 1 }).fecharAoPreencher, true);
+  assert.equal(normalizarConfigAutofill({ fecharAoPreencher: 0 }).fecharAoPreencher, false);
+  assert.equal(normalizarConfigAutofill({}).fecharAoPreencher, false);
 });
 
 test('migra o formato antigo `seletor` para `seletorPadrao`', () => {
@@ -60,6 +68,7 @@ test('GET_CONFIG inclui autofill (padrão na 1ª vez)', async () => {
   assert.deepEqual(r.autofill, {
     habilitado: false,
     seletorPadrao: SELETOR_OTP_PADRAO,
+    fecharAoPreencher: false,
     porDominio: {},
   });
 });
@@ -73,8 +82,18 @@ test('SET_AUTOFILL persiste seletor padrão e por domínio', async () => {
   assert.deepEqual(r.autofill, {
     habilitado: true,
     seletorPadrao: '#code',
+    fecharAoPreencher: false,
     porDominio: { 'a.com': '.x' },
   });
+});
+
+test('SET_AUTOFILL persiste fecharAoPreencher', async () => {
+  await bg.rotear({
+    type: 'SET_AUTOFILL',
+    config: { habilitado: true, fecharAoPreencher: true },
+  });
+  const r = await bg.rotear({ type: 'GET_CONFIG' });
+  assert.equal(r.autofill.fecharAoPreencher, true);
 });
 
 test('SET_AUTOFILL exige sessão desbloqueada', async () => {

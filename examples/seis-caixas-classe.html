@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>6 caixas com a mesma classe (.otp-box) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>5. Seis caixas separadas (uma por dígito)</h1>
+        <p class="subtitulo">
+          Seis <code>&lt;input maxlength="1"&gt;</code>, cada um com a classe
+          <code>otp-box</code>. É o segundo formato mais comum em telas de 2FA.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">.otp-box</code>
+          <button class="btn" type="button" data-copiar=".otp-box">Copiar</button>
+        </div>
+        <p class="dica">
+          Casa <strong>6 elementos</strong> (≥ 6) → a extensão entra no modo "um dígito por
+          caixa" e escreve um dígito em cada um dos 6, com <code>input</code>/<code>change</code>,
+          e <code>Enter</code> na última caixa.
+        </p>
+        <p class="aviso">
+          Confirme no seletor que ele casa <strong>exatamente os 6</strong> inputs — nada a mais.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <span class="campo-rotulo">Digite o código de 6 dígitos</span>
+          <div class="caixas">
+            <input class="caixa otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 1" />
+            <input class="caixa otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2" />
+            <input class="caixa otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3" />
+            <input class="caixa otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4" />
+            <input class="caixa otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 5" />
+            <input class="caixa otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 6" />
+          </div>
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite (o foco avança sozinho) e aperte
+          <strong>Enter</strong> — um modal mostra o resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

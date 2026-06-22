@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campo único padrão (one-time-code) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>1. Campo único com atributo padrão</h1>
+        <p class="subtitulo">
+          Um só <code>&lt;input&gt;</code> com <code>autocomplete="one-time-code"</code> — o
+          formato mais comum e o padrão de fábrica da extensão.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[autocomplete="one-time-code"]</code>
+          <button class="btn" type="button" data-copiar='input[autocomplete="one-time-code"]'>
+            Copiar
+          </button>
+        </div>
+        <p class="dica">
+          Como casa <strong>1 elemento</strong>, a extensão escreve o código inteiro (ex.:
+          <code>482913</code>) neste campo, dispara <code>input</code>/<code>change</code> e
+          então <code>Enter</code>.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <label class="campo-rotulo" for="otp">Código de verificação</label>
+          <input
+            class="entrada"
+            id="otp"
+            name="otp"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            placeholder="000000"
+          />
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite e aperte <strong>Enter</strong> — um modal mostra o
+          resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

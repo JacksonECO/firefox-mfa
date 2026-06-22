@@ -74,6 +74,7 @@ async function lerSegredo(mfa, chave) {
  *  - UNLOCK              → { ok }                                (task 02)
  *  - LOCK               → { ok }                                (task 02)
  *  - SESSION_STATUS     → { desbloqueado }                      (task 02)
+ *  - PING               → { ok }   (atividade do popup; keep-alive da sessão) (task 21)
  *  - SAVE_MFA           → { ok, mfa? , erro?/erros? }           (task 04)
  *  - LIST_MFAS          → { ok, mfas }   (só metadados)         (task 06)
  *  - GET_CODE           → { ok, codigo, segundosRestantes }     (task 07)
@@ -105,6 +106,12 @@ export async function rotear(mensagem) {
 
     case 'SESSION_STATUS':
       return { desbloqueado: sessao.estaDesbloqueado() };
+
+    case 'PING':
+      // Atividade vinda do popup (ex.: digitando o segredo no cadastro): conta
+      // como interação e mantém a sessão viva. Reforça o keep-alive da porta.
+      if (sessao.estaDesbloqueado()) sessao.registrarAtividade();
+      return { ok: true };
 
     case 'SAVE_MFA': {
       const chave = sessao.obterChave();
@@ -384,6 +391,16 @@ export async function rotear(mensagem) {
 // Registro dos listeners (no topo, síncrono). Os guards `?.` permitem importar
 // este módulo nos testes/Node, onde `browser` não existe.
 globalThis.browser?.runtime?.onMessage.addListener((mensagem) => rotear(mensagem));
+
+// Keep-alive da sessão (task 21): o popup abre uma porta de longa duração ao
+// carregar. Enquanto ela estiver conectada, a sessão não expira por inatividade —
+// o usuário pode demorar preenchendo um cadastro. Ao fechar o popup, a porta
+// desconecta e a janela de inatividade recomeça do zero.
+globalThis.browser?.runtime?.onConnect.addListener((porta) => {
+  if (porta.name !== 'popup-keepalive') return;
+  sessao.marcarPopupAberto();
+  porta.onDisconnect.addListener(() => sessao.marcarPopupFechado());
+});
 
 globalThis.browser?.alarms?.onAlarm.addListener((alarme) => {
   if (alarme.name === sessao.NOME_ALARME) sessao.bloquear();

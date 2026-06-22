@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>6 caixas com id sequencial (token-input-mfa-N) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>9. Seis caixas com <code>id</code> sequencial</h1>
+        <p class="subtitulo">
+          Seis <code>&lt;input maxlength="1"&gt;</code>, cada um com um <code>id</code> único e um
+          contador no final: de <code>token-input-mfa-0</code> a <code>token-input-mfa-5</code>.
+          Comum em sites que geram um id por dígito.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[id^="token-input-mfa-"]</code>
+          <button class="btn" type="button" data-copiar='input[id^="token-input-mfa-"]'>
+            Copiar
+          </button>
+        </div>
+        <p class="dica">
+          O <code>^=</code> significa "<strong>id que começa com</strong>". Assim um seletor só
+          casa as 6 caixas (<code>token-input-mfa-0</code> … <code>token-input-mfa-5</code>) sem
+          precisar listar cada id. Casa <strong>6 elementos</strong> (≥ 6) → modo "um dígito por
+          caixa", com <code>input</code>/<code>change</code> e <code>Enter</code> na última.
+        </p>
+        <p class="dica">
+          Alternativa (mais verbosa) listando os ids:
+        </p>
+        <pre><code>#token-input-mfa-0, #token-input-mfa-1, #token-input-mfa-2,
+#token-input-mfa-3, #token-input-mfa-4, #token-input-mfa-5</code></pre>
+        <p class="dica">
+          Para uma config cobrir <strong>dois esquemas de id</strong> ao mesmo tempo (ex.: este e
+          o <code>token-input-token-…</code> do exemplo 10), combine os prefixos com vírgula:
+        </p>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[id^="token-input-mfa-"], input[id^="token-input-token-"]</code>
+          <button
+            class="btn"
+            type="button"
+            data-copiar='input[id^="token-input-mfa-"], input[id^="token-input-token-"]'
+          >
+            Copiar combinado
+          </button>
+        </div>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <span class="campo-rotulo">Digite o código de 6 dígitos</span>
+          <div class="caixas">
+            <input class="caixa" id="token-input-mfa-0" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 1" />
+            <input class="caixa" id="token-input-mfa-1" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2" />
+            <input class="caixa" id="token-input-mfa-2" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3" />
+            <input class="caixa" id="token-input-mfa-3" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4" />
+            <input class="caixa" id="token-input-mfa-4" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 5" />
+            <input class="caixa" id="token-input-mfa-5" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 6" />
+          </div>
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite (o foco avança sozinho) e aperte
+          <strong>Enter</strong> — um modal mostra o resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

@@ -77,7 +77,15 @@ nenhuma task** — uma mudança que comprometa qualquer uma delas está errada:
    polimento futuro.
 7. **Chave em memória expira.** A `CryptoKey` vive só em memória do background e expira após
    **2 minutos de inatividade** (timer resetado a cada interação, via `alarms`). Reinício do
-   service worker = expiração (aceitável e até desejável).
+   service worker = expiração (aceitável e até desejável). **Enquanto o popup está aberto a
+   sessão não expira** (keep-alive por uma porta `runtime.connect` de longa duração): o usuário
+   pode demorar preenchendo um cadastro sem perder a sessão; a janela de 2 min só (re)começa
+   quando o popup fecha (porta desconecta). **Com o popup fechado, um heartbeat de 20s
+   (`runtime.getPlatformInfo`) mantém o event page vivo até faltarem ~30s para o timeout** —
+   senão o Firefox suspenderia o background em ~30s e a chave morreria antes do tempo
+   configurado. Nos últimos 30s o heartbeat para, deixando o Firefox suspender o worker
+   naturalmente (~30s depois do último toque) bem no fim da janela — assim a sessão não
+   sobrevive além do timeout configurado.
 8. **Zeroing best-effort.** Chamar `.fill(0)` em `Uint8Array`/`ArrayBuffer` com segredo em
    claro após o uso. Não é garantia absoluta (GC), mas reduz a janela de exposição.
 9. **Sem logs de segredo.** Nunca `console.log` de senha mestra, chave ou segredo em claro —

@@ -1,11 +1,14 @@
 {
-  "name": "firefox-mfa",
-  "version": "0.1.0",
+  "name": "mfa",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Gerenciador local de MFA/TOTP para Firefox. Sem build step; testes via node:test (zero dependências).",
   "scripts": {
     "test": "node --test",
     "empacotar": "./scripts/empacotar.sh"
+  },
+  "devDependencies": {
+    "web-ext": "^10.4.0"
   }
 }

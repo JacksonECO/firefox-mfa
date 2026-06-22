@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Exemplos de teste do autopreenchimento — MFA Num Toque</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <h1>Exemplos de teste do autopreenchimento</h1>
+        <p class="subtitulo">
+          Páginas estáticas (HTML + CSS + JS vanilla, sem rede) que simulam telas de login com
+          campo de código OTP, para testar o autopreenchimento da extensão
+          <strong>MFA Num Toque</strong>. Cada página usa uma estrutura de input diferente.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Para que serve</h2>
+        <p>
+          O autopreenchimento (opt-in) injeta apenas o <strong>código de 6 dígitos</strong> — nunca
+          o segredo — no(s) campo(s) da aba ativa, usando um <strong>seletor CSS</strong> que você
+          configura na extensão. Estas páginas dão alvos reais para validar cada formato de
+          campo e cada seletor.
+        </p>
+      </section>
+
+      <section class="cartao">
+        <h2>Como o autopreenchimento decide</h2>
+        <p>
+          Quando há exatamente 1 MFA para o domínio, a extensão roda
+          <code>document.querySelectorAll(SEU_SELETOR)</code> na página e:
+        </p>
+        <ol>
+          <li><strong>1 elemento casado</strong> → escreve o código inteiro (ex.: <code>482913</code>) nesse input.</li>
+          <li><strong>≥ 6 elementos casados</strong> → modo "um dígito por caixa": um dígito em cada um dos 6 primeiros.</li>
+          <li><strong>2 a 5 elementos</strong> → cai no modo de campo único e joga os 6 dígitos no primeiro input (ver exemplo 7).</li>
+        </ol>
+        <p>
+          Em todos os casos dispara <code>input</code> e <code>change</code> (para frameworks
+          reconhecerem o valor) e, no último campo, dispara <code>Enter</code> para tentar enviar
+          o formulário.
+        </p>
+      </section>
+
+      <section class="cartao">
+        <h2>Como testar</h2>
+        <ol>
+          <li>Abra a página de exemplo desejada no Firefox.</li>
+          <li>Na extensão, ative o autopreenchimento e cole o <strong>seletor</strong> indicado na página (há um botão "Copiar").</li>
+          <li>Tenha 1 MFA cadastrado para este domínio (ex.: <code>localhost</code> ou <code>127.0.0.1</code>, conforme você sirva os arquivos).</li>
+          <li>Abra o popup da extensão na aba: o código deve ser injetado nos campos.</li>
+          <li>O <strong>Enter</strong> disparado abre um <strong>modal</strong> mostrando o código montado, quantos campos foram preenchidos e quantos eventos <code>input</code>/<code>change</code> ocorreram.</li>
+        </ol>
+        <p class="dica">
+          Você também pode digitar à mão e apertar Enter (ou clicar em "Verificar") para ver o
+          mesmo modal — útil para comparar com o resultado da extensão.
+        </p>
+      </section>
+
+      <h2>Páginas de exemplo</h2>
+      <ul class="lista-exemplos">
+        <li class="item-exemplo">
+          <a href="campo-unico-padrao.html">
+            <p class="item-titulo">1. Campo único com atributo padrão</p>
+            <p class="item-desc">Um input com <code>autocomplete="one-time-code"</code> (padrão de fábrica).</p>
+            <span class="tag-seletor">input[autocomplete="one-time-code"]</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="campo-unico-id.html">
+            <p class="item-titulo">2. Campo único por <code>id</code></p>
+            <p class="item-desc">Um input identificado por <code>id="otp"</code>.</p>
+            <span class="tag-seletor">#otp</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="campo-unico-name.html">
+            <p class="item-titulo">3. Campo único por <code>name</code></p>
+            <p class="item-desc">Um input identificado por <code>name="code"</code>.</p>
+            <span class="tag-seletor">input[name="code"]</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="campo-unico-classe.html">
+            <p class="item-titulo">4. Campo único por classe</p>
+            <p class="item-desc">Um input com classe estável <code>codigo-2fa</code>.</p>
+            <span class="tag-seletor">input.codigo-2fa</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="seis-caixas-classe.html">
+            <p class="item-titulo">5. Seis caixas com a mesma classe</p>
+            <p class="item-desc">6 inputs de 1 dígito, classe <code>otp-box</code> (modo dígito-por-caixa).</p>
+            <span class="tag-seletor">.otp-box</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="seis-caixas-container.html">
+            <p class="item-titulo">6. Seis inputs dentro de um container</p>
+            <p class="item-desc">6 caixas sem classe própria, miradas pelo container pai.</p>
+            <span class="tag-seletor">#otp-container input</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="quatro-caixas.html">
+            <p class="item-titulo">7. Quatro caixas (caso de borda)</p>
+            <p class="item-desc">Menos de 6 caixas → fallback: 6 dígitos na primeira caixa.</p>
+            <span class="tag-seletor">.pin-box</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="multiplos-seletores.html">
+            <p class="item-titulo">8. Múltiplos seletores por vírgula</p>
+            <p class="item-desc">Um seletor único que tenta vários formatos de uma vez.</p>
+            <span class="tag-seletor">input[autocomplete="one-time-code"], #otp, input[name="code"]</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="caixas-id-sequencial.html">
+            <p class="item-titulo">9. Seis caixas com <code>id</code> sequencial</p>
+            <p class="item-desc">6 caixas com id único e contador (<code>token-input-mfa-0</code>…<code>5</code>), casadas por prefixo.</p>
+            <span class="tag-seletor">input[id^="token-input-mfa-"]</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="caixas-id-token.html">
+            <p class="item-titulo">10. Dois esquemas de <code>id</code> numa config só</p>
+            <p class="item-desc">Outro prefixo (<code>token-input-token-0</code>…<code>5</code>); mostra como cobrir os dois esquemas combinando prefixos por vírgula.</p>
+            <span class="tag-seletor">input[id^="token-input-mfa-"], input[id^="token-input-token-"]</span>
+          </a>
+        </li>
+      </ul>
+
+      <section class="cartao">
+        <h2>Referência rápida de seletores</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Situação na página</th>
+              <th>Seletor recomendado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Campo único com o atributo padrão</td><td><code>input[autocomplete="one-time-code"]</code></td></tr>
+            <tr><td>Campo único com <code>id="otp"</code></td><td><code>#otp</code></td></tr>
+            <tr><td>Campo único com <code>name="code"</code></td><td><code>input[name="code"]</code></td></tr>
+            <tr><td>Campo único por classe</td><td><code>input.codigo-2fa</code></td></tr>
+            <tr><td>6 caixas com a mesma classe</td><td><code>.otp-box</code></td></tr>
+            <tr><td>6 inputs dentro de um container</td><td><code>#otp-container input</code></td></tr>
+            <tr><td>6 caixas com id sequencial (prefixo + contador)</td><td><code>input[id^="token-input-mfa-"]</code></td></tr>
+            <tr><td>Dois esquemas de id na mesma config (prefixos por vírgula)</td><td><code>input[id^="token-input-mfa-"], input[id^="token-input-token-"]</code></td></tr>
+            <tr><td>Vários candidatos (tenta todos)</td><td><code>input[autocomplete="one-time-code"], #otp, input[name="code"]</code></td></tr>
+          </tbody>
+        </table>
+        <p class="dica">
+          Prefira seletores <strong>estáveis</strong> (<code>id</code>, <code>name</code>,
+          <code>autocomplete</code>) a classes geradas por build. O guia completo está em
+          <code>docs/autopreenchimento.md</code>.
+        </p>
+      </section>
+
+      <p class="rodape">Exemplos de teste · MFA Num Toque · 100% local, sem rede</p>
+    </div>
+  </body>
+</html>

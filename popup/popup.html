@@ -16,17 +16,22 @@
       <!-- Primeiro acesso: criar senha mestra -->
       <section id="view-criar-senha" class="view" hidden>
         <p class="view__desc">Defina uma senha mestra para proteger seus códigos.</p>
-        <form id="form-criar-senha" class="form" novalidate>
+        <!-- autocomplete="off" em todo o formulário e nos campos: a senha mestra NUNCA
+             deve ser oferecida/salva pelo gerenciador do navegador (a segurança exige
+             que o usuário a memorize e digite sempre). -->
+        <form id="form-criar-senha" class="form" novalidate autocomplete="off">
           <label class="field">
             <span class="field__label">Senha mestra</span>
             <input
               class="field__input"
               id="criar-senha"
               type="password"
-              autocomplete="new-password"
+              autocomplete="off"
+              data-autofocus
             />
           </label>
           <p class="field__erro" id="criar-senha-erro" role="alert"></p>
+          <div id="criar-senha-forca" class="forca" hidden></div>
 
           <label class="field">
             <span class="field__label">Confirmar senha</span>
@@ -34,7 +39,7 @@
               class="field__input"
               id="criar-senha-conf"
               type="password"
-              autocomplete="new-password"
+              autocomplete="off"
             />
           </label>
           <p class="field__erro" id="criar-senha-conf-erro" role="alert"></p>
@@ -49,7 +54,8 @@
       <!-- Desbloqueio -->
       <section id="view-desbloquear" class="view" hidden>
         <p class="view__desc">Digite sua senha mestra para desbloquear.</p>
-        <form id="form-desbloquear" class="form" novalidate>
+        <!-- autocomplete="off": o navegador não deve sugerir nem salvar a senha mestra. -->
+        <form id="form-desbloquear" class="form" novalidate autocomplete="off">
           <label class="field">
             <span class="field__label">Senha mestra</span>
             <span class="field__secret">
@@ -57,7 +63,8 @@
                 class="field__input"
                 id="desbloquear-senha"
                 type="password"
-                autocomplete="current-password"
+                autocomplete="off"
+                data-autofocus
               />
               <button
                 class="btn-link"
@@ -172,23 +179,25 @@
           <p class="form__status" id="ratelimit-status" role="status"></p>
         </form>
 
-        <form id="form-trocar-senha" class="form config__bloco" novalidate>
+        <!-- autocomplete="off": o navegador não deve sugerir nem salvar a senha mestra. -->
+        <form id="form-trocar-senha" class="form config__bloco" novalidate autocomplete="off">
           <h2 class="config__titulo">Trocar senha mestra</h2>
           <p class="config__ajuda">
             Todos os segredos são recriptografados com a nova senha.
           </p>
           <label class="field">
             <span class="field__label">Senha atual</span>
-            <input class="field__input" id="ts-atual" type="password" autocomplete="current-password" />
+            <input class="field__input" id="ts-atual" type="password" autocomplete="off" />
           </label>
           <label class="field">
             <span class="field__label">Nova senha</span>
-            <input class="field__input" id="ts-nova" type="password" autocomplete="new-password" />
+            <input class="field__input" id="ts-nova" type="password" autocomplete="off" />
           </label>
           <p class="field__erro" id="ts-nova-erro" role="alert"></p>
+          <div id="ts-forca" class="forca" hidden></div>
           <label class="field">
             <span class="field__label">Confirmar nova senha</span>
-            <input class="field__input" id="ts-conf" type="password" autocomplete="new-password" />
+            <input class="field__input" id="ts-conf" type="password" autocomplete="off" />
           </label>
           <p class="field__erro" id="ts-conf-erro" role="alert"></p>
           <button class="btn" type="submit">Trocar senha</button>
@@ -208,6 +217,10 @@
           <label class="field field--inline">
             <input id="af-habilitado" type="checkbox" />
             <span class="field__label">Habilitar autopreenchimento</span>
+          </label>
+          <label class="field field--inline">
+            <input id="af-fechar" type="checkbox" />
+            <span class="field__label">Fechar o popup quando preencher com sucesso</span>
           </label>
           <label class="field">
             <span class="field__label">Seletor CSS padrão</span>

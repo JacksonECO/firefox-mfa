@@ -12,6 +12,7 @@ export const SELETOR_OTP_PADRAO = 'input[autocomplete="one-time-code"]';
 export const AUTOFILL_PADRAO = Object.freeze({
   habilitado: false,
   seletorPadrao: SELETOR_OTP_PADRAO,
+  fecharAoPreencher: false,
   porDominio: {},
 });
 
@@ -40,7 +41,12 @@ export function normalizarConfigAutofill(parcial = {}) {
     }
   }
 
-  return { habilitado: Boolean(parcial.habilitado), seletorPadrao, porDominio };
+  return {
+    habilitado: Boolean(parcial.habilitado),
+    seletorPadrao,
+    fecharAoPreencher: Boolean(parcial.fecharAoPreencher),
+    porDominio,
+  };
 }
 
 /**

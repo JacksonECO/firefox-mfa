@@ -1,0 +1,458 @@
+/*
+ * Estilo compartilhado das páginas de exemplo (somente para testar o
+ * autopreenchimento da extensão). Vanilla CSS, sem framework, nada de rede.
+ *
+ * Os tokens espelham popup/theme.css do projeto para o visual ficar coerente:
+ * sóbrio, arredondado e futurista; tema claro/escuro automático via
+ * prefers-color-scheme; escala de espaçamento de 4px.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --fs-small: 12px;
+  --fs-body: 14px;
+  --fs-title: 18px;
+  --fs-h1: 24px;
+  --fw-semibold: 600;
+
+  --transicao: 150ms ease;
+  --focus-ring: #a5b4fc;
+
+  /* Tema escuro (padrão) */
+  --color-bg: #10131c;
+  --color-surface: #1a1f2e;
+  --color-surface-hover: #232a3b;
+  --color-border: #2a3142;
+  --color-text: #eef2ff;
+  --color-muted: #9aa3b8;
+
+  --color-accent: #6366f1;
+  --color-accent-hover: #5457e5;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: rgba(99, 102, 241, 0.18);
+
+  --color-secondary: #2a3142;
+  --color-secondary-hover: #353d52;
+
+  --color-success: #4ade80;
+  --color-warning: #d9a441;
+  --color-danger-text: #f0727d;
+
+  --color-code-bg: #0b0e16;
+  --color-overlay: rgba(8, 10, 16, 0.72);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #f5f6fa;
+    --color-surface: #ffffff;
+    --color-surface-hover: #eef0f6;
+    --color-border: #dce0ea;
+    --color-text: #1b1f2a;
+    --color-muted: #5b6273;
+
+    --color-accent-soft: rgba(99, 102, 241, 0.1);
+    --color-secondary: #e2e6ee;
+    --color-secondary-hover: #d4d8e2;
+
+    --color-success: #15803d;
+    --color-code-bg: #f0f2f8;
+    --color-overlay: rgba(20, 24, 33, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Cabeçalho de página */
+.topo {
+  margin-bottom: var(--space-5);
+}
+
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-muted);
+  text-decoration: none;
+  font-size: var(--fs-small);
+  margin-bottom: var(--space-3);
+  transition: color var(--transicao);
+}
+
+.voltar:hover {
+  color: var(--color-text);
+}
+
+h1 {
+  font-size: var(--fs-h1);
+  font-weight: var(--fw-semibold);
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+  margin: var(--space-5) 0 var(--space-3);
+}
+
+.subtitulo {
+  color: var(--color-muted);
+  margin: 0 0 var(--space-4);
+}
+
+/* Cartão genérico */
+.cartao {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+/* Bloco do seletor recomendado */
+.seletor-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.seletor-rotulo {
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+}
+
+code,
+.codigo-inline {
+  font-family: var(--font-mono);
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  font-size: 13px;
+}
+
+pre {
+  font-family: var(--font-mono);
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+pre code {
+  border: 0;
+  padding: 0;
+  background: none;
+}
+
+/* Botão de copiar seletor */
+.btn {
+  font-family: inherit;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text);
+  background: var(--color-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: background var(--transicao);
+}
+
+.btn:hover {
+  background: var(--color-secondary-hover);
+}
+
+.btn-accent {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  border-color: transparent;
+}
+
+.btn-accent:hover {
+  background: var(--color-accent-hover);
+}
+
+/* Área de teste — o "formulário de login" simulado */
+.area-teste {
+  background: var(--color-accent-soft);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin: var(--space-4) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.campo-rotulo {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+/* Input de campo único */
+.entrada {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 0.35em;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.entrada::placeholder {
+  letter-spacing: normal;
+  color: var(--color-muted);
+}
+
+/* Caixas individuais (um dígito por input) */
+.caixas {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.caixa {
+  width: 48px;
+  height: 56px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0;
+}
+
+.entrada:focus,
+.caixa:focus,
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-color: transparent;
+}
+
+.acoes {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dica {
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+  margin: var(--space-2) 0 0;
+}
+
+/* Índice — lista de exemplos */
+.lista-exemplos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.item-exemplo a {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: background var(--transicao), border-color var(--transicao);
+}
+
+.item-exemplo a:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-accent);
+}
+
+.item-titulo {
+  font-weight: var(--fw-semibold);
+  margin: 0 0 var(--space-1);
+}
+
+.item-desc {
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.tag-seletor {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--color-accent);
+}
+
+/* Tabela da mini-documentação */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+  margin: var(--space-3) 0;
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--color-muted);
+  font-weight: var(--fw-semibold);
+}
+
+td code {
+  white-space: nowrap;
+}
+
+ol,
+ul {
+  padding-left: var(--space-5);
+}
+
+li {
+  margin-bottom: var(--space-1);
+}
+
+.aviso {
+  font-size: var(--fs-small);
+  color: var(--color-warning);
+}
+
+/* ------- Modal de resultado ------- */
+.modal-fundo {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: 100;
+}
+
+.modal-fundo[data-aberto='true'] {
+  display: flex;
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.modal-titulo {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semibold);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.modal-codigo {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.modal-detalhes {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  font-size: var(--fs-small);
+}
+
+.modal-detalhes li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-detalhes .rotulo {
+  color: var(--color-muted);
+}
+
+.modal-detalhes .valor {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.modal-rodape {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rodape {
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--fs-small);
+  margin-top: var(--space-6);
+}

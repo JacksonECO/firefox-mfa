@@ -19,7 +19,8 @@
       </p>
 
       <div id="backup-conteudo" hidden>
-        <form id="form-exportar" class="form config__bloco" novalidate>
+        <!-- autocomplete="off": o navegador não deve sugerir nem salvar a senha de backup. -->
+        <form id="form-exportar" class="form config__bloco" novalidate autocomplete="off">
           <h2 class="config__titulo">Exportar backup</h2>
           <p class="config__ajuda">
             Defina uma senha de exportação (independente da senha mestra). Ela protege o arquivo
@@ -27,14 +28,14 @@
           </p>
           <label class="field">
             <span class="field__label">Senha de exportação</span>
-            <input class="field__input" id="exportar-senha" type="password" autocomplete="new-password" />
+            <input class="field__input" id="exportar-senha" type="password" autocomplete="off" />
           </label>
           <p class="field__erro" id="exportar-erro" role="alert"></p>
           <button class="btn" type="submit">Baixar arquivo de backup</button>
           <p class="form__status" id="exportar-status" role="status"></p>
         </form>
 
-        <form id="form-importar" class="form config__bloco" novalidate>
+        <form id="form-importar" class="form config__bloco" novalidate autocomplete="off">
           <h2 class="config__titulo">Importar backup</h2>
           <label class="field">
             <span class="field__label">Arquivo de backup (.json)</span>

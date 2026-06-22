@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>6 inputs dentro de um container (#otp-container input) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>6. Seis inputs dentro de um container</h1>
+        <p class="subtitulo">
+          As caixas <strong>não têm classe própria</strong>, mas estão dentro de um
+          <code>&lt;div id="otp-container"&gt;</code>. Aí o seletor mira o container.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">#otp-container input</code>
+          <button class="btn" type="button" data-copiar="#otp-container input">Copiar</button>
+        </div>
+        <p class="dica">
+          Casa <strong>6 elementos</strong> (≥ 6) → modo "um dígito por caixa", com
+          <code>input</code>/<code>change</code> e <code>Enter</code> na última caixa. Mirar pelo
+          container é útil quando os inputs não têm <code>id</code>/classe estáveis.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <span class="campo-rotulo">Código enviado por SMS</span>
+          <div class="caixas" id="otp-container">
+            <input class="caixa" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 1" />
+            <input class="caixa" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2" />
+            <input class="caixa" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3" />
+            <input class="caixa" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4" />
+            <input class="caixa" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 5" />
+            <input class="caixa" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 6" />
+          </div>
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite (o foco avança sozinho) e aperte
+          <strong>Enter</strong> — um modal mostra o resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

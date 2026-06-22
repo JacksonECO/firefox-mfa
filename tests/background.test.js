@@ -42,6 +42,21 @@ test('LIST_MFAS bloqueado quando a sessão expira', async () => {
   });
 });
 
+test('PING conta como atividade e reagenda a expiração quando desbloqueado', async () => {
+  const antes = globalThis.browser._alarmesCriados.length;
+  const r = await bg.rotear({ type: 'PING' });
+  assert.equal(r.ok, true);
+  assert.ok(globalThis.browser._alarmesCriados.length > antes, 'PING deve reagendar o alarme');
+});
+
+test('PING não agenda nada quando a sessão está bloqueada', async () => {
+  await bg.rotear({ type: 'LOCK' });
+  const antes = globalThis.browser._alarmesCriados.length;
+  const r = await bg.rotear({ type: 'PING' });
+  assert.equal(r.ok, true);
+  assert.equal(globalThis.browser._alarmesCriados.length, antes);
+});
+
 /* --------------------------------- task 07 --------------------------------- */
 
 test('GET_CODE devolve um código de 6 dígitos (e nunca o segredo)', async () => {

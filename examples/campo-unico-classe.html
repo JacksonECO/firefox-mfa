@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campo único por classe (input.codigo-2fa) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>4. Campo único identificado por classe</h1>
+        <p class="subtitulo">
+          Um só <code>&lt;input class="codigo-2fa"&gt;</code>. Use uma classe
+          <strong>estável</strong> — evite classes geradas por build (ex.: <code>css-1a2b3c</code>).
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">input.codigo-2fa</code>
+          <button class="btn" type="button" data-copiar="input.codigo-2fa">Copiar</button>
+        </div>
+        <p class="dica">
+          Casa <strong>1 elemento</strong> → o código inteiro vai neste campo, seguido de
+          <code>input</code>/<code>change</code> e <code>Enter</code>.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <label class="campo-rotulo" for="campo-classe">Autenticação em duas etapas</label>
+          <input
+            class="entrada codigo-2fa"
+            id="campo-classe"
+            name="auth"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="000000"
+          />
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão ou digite e aperte <strong>Enter</strong> — um modal mostra o
+          resultado.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

@@ -36,7 +36,20 @@ página ativa, `document.querySelectorAll(SEU_SELETOR)` e:
 | Campo único por classe | `input.codigo-2fa` |
 | 6 caixas separadas com a mesma classe | `.otp-box` (precisa casar os 6 inputs) |
 | 6 inputs dentro de um container | `#otp-container input` |
+| 6 caixas com `id` sequencial (prefixo + contador) | `input[id^="token-input-mfa-"]` |
 | Vários candidatos (tenta todos) | `input[autocomplete="one-time-code"], #otp, input[name="code"]` |
+
+Quando cada caixa tem um **`id` único terminado em um contador** (ex.: `token-input-mfa-0`,
+`token-input-mfa-1`, … `token-input-mfa-5`), use o seletor de **prefixo** `^=` para casar todas
+de uma vez sem listar cada id: `input[id^="token-input-mfa-"]` (lê-se "id que **começa com**"). Os
+operadores de substring do CSS também valem: `*=` (contém), `$=` (termina com). A alternativa
+explícita — `#token-input-mfa-0, #token-input-mfa-1, …` separados por vírgula — funciona, mas é
+mais verbosa.
+
+Para uma única config cobrir **mais de um esquema de `id`** (sites diferentes usam prefixos
+diferentes), combine os seletores de prefixo com vírgula:
+`input[id^="token-input-mfa-"], input[id^="token-input-token-"]`. Como cada página de login só
+tem um dos esquemas, a união casa exatamente as 6 caixas presentes em cada site.
 
 Você pode combinar **múltiplos seletores separados por vírgula** — o `querySelectorAll` casa
 todos. Isso é útil para uma config que funcione em mais de um site.

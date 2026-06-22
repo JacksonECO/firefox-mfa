@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>4 caixas — caso de borda (.pin-box) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>7. Quatro caixas — caso de borda</h1>
+        <p class="subtitulo">
+          Quatro <code>&lt;input maxlength="1"&gt;</code> com a classe <code>pin-box</code>.
+          Serve para ver o que acontece quando há <strong>menos de 6</strong> caixas.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletor para configurar</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">.pin-box</code>
+          <button class="btn" type="button" data-copiar=".pin-box">Copiar</button>
+        </div>
+        <p class="dica">
+          O modo "um dígito por caixa" só liga com <strong>≥ 6</strong> elementos. Como aqui
+          casam <strong>4</strong>, a extensão cai no modo de campo único e joga os
+          <strong>6 dígitos inteiros na primeira caixa</strong>.
+        </p>
+        <p class="aviso">
+          É de propósito: um código TOTP tem 6 dígitos, então 4 caixas não combinam. O teste
+          mostra esse comportamento — não é o uso recomendado.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-teste autocomplete="off">
+        <div>
+          <span class="campo-rotulo">PIN de 4 dígitos (incompatível com TOTP)</span>
+          <div class="caixas">
+            <input class="caixa pin-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 1" />
+            <input class="caixa pin-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2" />
+            <input class="caixa pin-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3" />
+            <input class="caixa pin-box" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4" />
+          </div>
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="submit">Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Pela extensão, espere ver os 6 dígitos amontoados na primeira caixa (comportamento de
+          fallback). Aperte <strong>Enter</strong> para ver o resultado no modal.
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-mfa.js" defer></script>
+  </body>
+</html>

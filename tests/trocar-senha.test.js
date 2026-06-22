@@ -49,11 +49,11 @@ test('senha atual incorreta não altera nada', async () => {
   assert.equal(globalThis.browser._dados.get('cryptoSalt'), antes); // salt intacto
 });
 
-test('nova senha curta é rejeitada', async () => {
+test('nova senha curta (< 3) é rejeitada', async () => {
   const r = await bg.rotear({
     type: 'CHANGE_MASTER_PASSWORD',
     senhaAtual: 'senha-antiga-1',
-    senhaNova: 'abc',
+    senhaNova: 'ab',
   });
   assert.equal(r.ok, false);
   assert.equal(r.erro, 'SENHA_NOVA_INVALIDA');
