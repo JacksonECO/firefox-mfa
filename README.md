@@ -1,7 +1,7 @@
 # MFA Num Toque
 
-Extensão (plug-in) para **Firefox** que gerencia códigos **MFA / TOTP** (RFC 6238),
-substituindo apps de autenticação externos. Dois diferenciais norteiam o produto:
+Extensão (plug-in) para **Firefox** e **Chrome** que gerencia códigos **MFA / TOTP**
+(RFC 6238), substituindo apps de autenticação externos. Dois diferenciais norteiam o produto:
 
 1. **Foco no domínio atual** — o popup mostra por padrão só os MFAs do domínio da aba ativa.
 2. **Segurança das chaves** — segredos TOTP sempre criptografados em repouso, decriptados só
@@ -17,8 +17,11 @@ estão em [`CLAUDE.md`](./CLAUDE.md).
 
 ## Como instalar (passo a passo)
 
-A extensão roda como **instalação temporária** no Firefox (não precisa de loja). Não há build
-step: o código é carregado direto.
+Não há build step: o código é carregado direto. O **mesmo código** roda nos dois navegadores —
+a diferença é só qual manifesto cada um usa (`manifest.json` no Firefox, `manifest.chrome.json`
+no Chrome, montado por `scripts/empacotar.sh chrome`).
+
+### Firefox (instalação temporária)
 
 1. Abra o **Firefox** e digite na barra de endereço: `about:debugging#/runtime/this-firefox`
 2. Clique em **"Carregar extensão temporária…"**.
@@ -28,6 +31,20 @@ step: o código é carregado direto.
 
 > A instalação temporária some ao **fechar o Firefox** — repita os passos a cada sessão. Se
 > editar o código, volte em `about:debugging` e clique em **"Recarregar"**.
+
+### Chrome (Load unpacked)
+
+O Chrome exige `manifest.json` na raiz do pacote (com `service_worker` e ícones PNG). O script
+monta isso para você:
+
+1. Gere a pasta do Chrome: `npm run empacotar:chrome` (gera os ícones PNG e
+   `web-ext-artifacts/chrome-build/`).
+2. Abra o **Chrome** em `chrome://extensions` e ative o **"Modo desenvolvedor"** (canto
+   superior direito).
+3. Clique em **"Carregar sem compactação"** e selecione a pasta
+   **`web-ext-artifacts/chrome-build/`**.
+4. O ícone do **MFA Num Toque** aparece na barra. Após editar o código, rode o comando de novo
+   e clique em **"Atualizar"** na página de extensões.
 
 ## Como usar (passo a passo)
 
@@ -70,12 +87,14 @@ step: o código é carregado direto.
 ## Estrutura do projeto
 
 ```
-/manifest.json        manifest MV3 (permissões mínimas + CSP explícita)
-/icons/               ícone da extensão (SVG)
+/manifest.json        manifest MV3 do Firefox (event page; permissões mínimas + CSP)
+/manifest.chrome.json manifest MV3 do Chrome (service worker; ícones PNG)
+/icons/               ícone da extensão (SVG para Firefox; PNGs gerados para o Chrome)
 /popup/               UI do popup
     popup.html  popup.js  cards.js  theme.css (tokens)  popup.css
 /src/                 lógica (rodando no background quando toca cripto/segredo)
     background.js   roteador de mensagens — dono da crypto e do segredo em claro
+    navegador.js    shim browser/chrome (primeiro import de cada entry point)
     sessao.js       chave em memória + expiração de 2 min + rate limiting
     crypto.js       PBKDF2 + AES-GCM (Web Crypto nativa)
     storage.js      única camada que acessa browser.storage.local
@@ -83,18 +102,28 @@ step: o código é carregado direto.
     dominio.js  base32.js  cadastro.js  senha.js  listagem.js  codigo.js
     ratelimit.js  backup.js
 /tests/               testes (node:test, sem dependências)
-/scripts/             empacotar.sh — gera o .zip
+/scripts/             empacotar.sh (gera os .zip)  gerar-icones.sh (PNGs do Chrome)
 /ia/                  docs de planejamento (uma task por arquivo)
 ```
 
 ## Empacotar (gerar o .zip)
 
 ```bash
-./scripts/empacotar.sh
+npm run empacotar           # gera AMBOS (Firefox + Chrome); ou: ./scripts/empacotar.sh
+npm run empacotar:firefox   # só Firefox
+npm run empacotar:chrome    # só Chrome (gera os ícones PNG automaticamente)
 ```
 
-Gera `web-ext-artifacts/firefox-mfa.zip` com só os arquivos de runtime. Requer o utilitário
-`zip` (`sudo apt install zip` no Ubuntu).
+A versão da extensão (lida do manifesto) entra no nome do `.zip`:
+
+- **Firefox** → `web-ext-artifacts/firefox-mfa-<versao>.zip` (usa `manifest.json`, ícone SVG).
+- **Chrome** → `web-ext-artifacts/chrome-build/` (pasta p/ Load unpacked) e
+  `web-ext-artifacts/chrome-mfa-<versao>.zip` (artefato p/ Chrome Web Store; usa
+  `manifest.chrome.json` renomeado para `manifest.json` na raiz, com `service_worker` e PNGs).
+
+Requer o utilitário `zip` (`sudo apt install zip` no Ubuntu). Os ícones PNG do Chrome são
+rasterizados de `icons/icon.svg` por `scripts/gerar-icones.sh` (usa `rsvg-convert`/`inkscape`/
+ImageMagick ou, em último caso, Chrome/Chromium headless).
 
 ## Testes
 
@@ -140,8 +169,11 @@ Nenhuma permissão ampla (`tabs` genérica, `<all_urls>`, `http://*/*`).
 
 ## Nota de plataforma
 
-O alvo garantido do MVP é **Ubuntu/Linux + Firefox**. No Firefox, o background de uma extensão
-MV3 roda como **event page** (`background.scripts`, não-persistente), não como `service_worker`
-ao estilo do Chrome — por isso o `manifest.json` usa `background.scripts`. Os docs em `ia/` se
-referem ao background como "service worker" pelo papel que ele cumpre; o comportamento é
-equivalente. Outros sistemas operacionais/navegadores são trabalho futuro.
+O alvo garantido do MVP é **Ubuntu/Linux**, em **Firefox** e **Chrome**, a partir de um único
+código (ver [`ia/27-suporte-chrome.md`](./ia/27-suporte-chrome.md)). A diferença entre os
+navegadores é mínima e isolada: o Firefox roda o background como **event page**
+(`manifest.json` → `background.scripts`) e o Chrome como **service worker**
+(`manifest.chrome.json` → `background.service_worker`); o namespace `browser.*`/`chrome.*` é
+unificado pelo shim `src/navegador.js`; e os ícones SVG (Firefox) viram PNG no Chrome. Os docs
+em `ia/` se referem ao background como "service worker" pelo papel que ele cumpre; o
+comportamento é equivalente nos dois. Outros sistemas operacionais são trabalho futuro.

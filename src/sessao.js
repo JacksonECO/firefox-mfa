@@ -236,16 +236,18 @@ function cancelarExpiracao() {
   globalThis.browser?.alarms?.clear(NOME_ALARME);
 }
 
-// Heartbeat para manter o background (event page do Firefox) vivo enquanto a sessão
-// deve durar. Com o popup fechado, o Firefox suspende o background em ~30s e a chave
-// em memória se perderia ANTES do timeout configurado (que é em minutos). A cada 20s
-// tocamos uma API do browser para resetar a ociosidade do worker — até a janela de
-// inatividade acabar, quando a sessão expira normalmente. `alarms` não resolveria:
-// eles reiniciam o worker (sem a chave), em vez de mantê-lo vivo.
+// Heartbeat para manter o background vivo enquanto a sessão deve durar. A mesma
+// estratégia serve aos dois navegadores: o Firefox suspende o event page e o Chrome
+// suspende o service worker após ~30s ociosos — e ambos resetam essa ociosidade a
+// cada chamada de API. Com o popup fechado, a chave em memória se perderia ANTES do
+// timeout configurado (que é em minutos); a cada 20s tocamos uma API do browser para
+// resetar a ociosidade do worker, até a janela de inatividade acabar, quando a sessão
+// expira normalmente. `alarms` não resolveria: eles reiniciam o worker (sem a chave),
+// em vez de mantê-lo vivo.
 const INTERVALO_KEEPALIVE_MS = 20_000;
-// O Firefox suspende o event page após ~30s ociosos. Por isso paramos o heartbeat
-// quando faltam <= 30s para o timeout: o worker suspende naturalmente ~30s após o
-// último toque, bem no fim da janela — sem manter o background além do configurado.
+// Firefox (event page) e Chrome (service worker) suspendem após ~30s ociosos. Por isso
+// paramos o heartbeat quando faltam <= 30s para o timeout: o worker suspende naturalmente
+// ~30s após o último toque, bem no fim da janela — sem manter o background além do configurado.
 const MARGEM_SUSPENSAO_MS = 30_000;
 let timerKeepalive = null;
 

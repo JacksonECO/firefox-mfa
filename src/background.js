@@ -3,10 +3,13 @@
 // só troca as mensagens roteadas abaixo.
 //
 // Nota de plataforma: o Firefox MV3 executa este background como event page
-// (background.scripts), não como service_worker ao estilo do Chrome. Por isso
-// os listeners de eventos são registrados no topo do módulo, de forma síncrona,
-// para que o worker consiga "acordar" ao receber uma mensagem/alarme.
+// (manifest.json → background.scripts) e o Chrome como service worker
+// (manifest.chrome.json → background.service_worker); ver ia/27-suporte-chrome.md.
+// Em ambos os listeners de eventos são registrados no topo do módulo, de forma
+// síncrona, para que o worker consiga "acordar" ao receber uma mensagem/alarme.
+// O shim ./navegador.js (primeiro import) aponta `browser` → `chrome` no Chrome.
 
+import './navegador.js'; // shim browser/chrome — deve vir antes de qualquer uso de `browser`
 import * as sessao from './sessao.js';
 import * as storage from './storage.js';
 import * as cripto from './crypto.js';

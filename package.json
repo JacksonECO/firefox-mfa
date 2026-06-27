@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Gerenciador local de MFA/TOTP para Firefox. Sem build step; testes via node:test (zero dependências).",
+  "description": "Gerenciador local de MFA/TOTP para Firefox e Chrome. Sem build step; testes via node:test (zero dependências).",
   "scripts": {
     "test": "node --test",
-    "empacotar": "./scripts/empacotar.sh"
+    "icones": "./scripts/gerar-icones.sh",
+    "empacotar": "./scripts/empacotar.sh",
+    "empacotar:firefox": "./scripts/empacotar.sh firefox",
+    "empacotar:chrome": "./scripts/empacotar.sh chrome"
   },
   "devDependencies": {
     "web-ext": "^10.4.0"

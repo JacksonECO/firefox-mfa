@@ -6,6 +6,7 @@
 // (textContent, nunca innerHTML). A única exceção é o REVEAL_SECRET pontual do
 // fluxo de edição, descartado do campo ao sair.
 
+import '../src/navegador.js'; // shim browser/chrome — deve vir antes de qualquer uso de `browser`
 import { extrairDominioDaAba, ehLocalhost } from '../src/dominio.js';
 import { validarCadastro } from '../src/cadastro.js';
 import {

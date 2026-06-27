@@ -29,16 +29,31 @@ consulte o arquivo da task antes de implementá-la.
   primitiva criptográfica à mão.
 - Lib leve, auditada e **vendorizada** (copiada para o repo, sem CDN/registry em runtime) para
   o algoritmo TOTP.
-- Plataforma alvo obrigatória no MVP: **Ubuntu/Linux + Firefox**.
+- Plataforma alvo obrigatória no MVP: **Ubuntu/Linux**, em **Firefox e Chrome** (codebase
+  único; ver `ia/27-suporte-chrome.md`).
+
+**Cross-browser (Firefox + Chrome).** Um só código roda nos dois navegadores. As únicas
+divergências são isoladas:
+- **Dois manifestos:** `manifest.json` = Firefox (`background.scripts`/event page, ícone SVG);
+  `manifest.chrome.json` = Chrome (`background.service_worker`, ícones PNG, sem
+  `browser_specific_settings`). O `manifest.json` da raiz é sempre o do Firefox.
+- **Shim de namespace:** todo ponto de entrada (`background.js`, `popup.js`, `backup.js`)
+  importa **`src/navegador.js` como primeiro import** — ele aponta `browser` → `chrome` no
+  Chrome. Use sempre `browser.*` no código (nunca `chrome.*` direto).
+- **Empacotar:** `./scripts/empacotar.sh` gera os dois pacotes (com a versão do manifesto no
+  nome do `.zip`); aceita `firefox`/`chrome` para um só. O alvo chrome roda
+  `scripts/gerar-icones.sh` para rasterizar os PNGs do SVG.
 
 Estrutura de pastas planejada (ver `ia/01`):
 
 ```
-/manifest.json
-/icons/
+/manifest.json        manifesto do Firefox (event page)
+/manifest.chrome.json manifesto do Chrome (service worker)
+/icons/               icon.svg (Firefox) + icon-{16,32,48,128}.png (Chrome, gerados)
 /popup/        popup.html, popup.css, popup.js, theme.css   (UI; superfície mais exposta)
 /src/
   background.js   service worker — DONO de toda crypto e segredo em claro
+  navegador.js    shim browser/chrome (primeiro import de cada entry point)
   storage.js      única camada que toca browser.storage.local
   dominio.js      extrairDominioDaAba(tab) — utilitário compartilhado
 ```

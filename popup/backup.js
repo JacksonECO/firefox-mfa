@@ -2,6 +2,8 @@
 // não destrua o contexto (como acontecia no popup). Conversa com o background
 // pela mesma sessão; nunca manipula a chave nem o segredo bruto.
 
+import '../src/navegador.js'; // shim browser/chrome — deve vir antes de qualquer uso de `browser`
+
 const $ = (id) => document.getElementById(id);
 const enviar = (mensagem) => browser.runtime.sendMessage(mensagem);
 const limpar = (el) => {
