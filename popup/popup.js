@@ -107,7 +107,7 @@ async function rotearVistaInicial() {
   if (ehLocalhost(dominioAtual)) {
     const locais = await enviar({ type: 'LIST_LOCALHOST', dominio: dominioAtual }).catch(() => null);
     if (locais?.ok && locais.mfas.length > 0) {
-      abrirLocalhost(dominioAtual, locais.mfas);
+      await abrirLocalhost(dominioAtual, locais.mfas);
       return;
     }
   }
@@ -115,13 +115,32 @@ async function rotearVistaInicial() {
   mostrarVista(decidirTela({ temSenha, sessaoAtiva })); // criar-senha ou desbloquear
 }
 
-function abrirLocalhost(dominio, mfas) {
+async function abrirLocalhost(dominio, mfas) {
   mostrarVista('localhost');
+  limpar($('localhost-aviso'));
   dizer($('localhost-contexto'), `MFAs locais de ${dominio} (sem criptografia)`);
-  renderizarLista($('localhost-lista'), mfas, {
+  const controladores = await renderizarLista($('localhost-lista'), mfas, {
     obterCodigo: (id) => enviar({ type: 'GET_CODE_LOCALHOST', id }),
     aoEditar: null, // sem edição sem login
   });
+
+  // Ações "ao abrir" (autocópia/autopreenchimento) também valem aqui (task 28):
+  // só com exatamente 1 MFA local, igual à tela principal. A config vem por uma
+  // mensagem que não exige sessão (GET_CONFIG_PUBLICO) — só dados não sensíveis.
+  if (mfas.length !== 1) return;
+  let config = {};
+  try {
+    config = (await enviar({ type: 'GET_CONFIG_PUBLICO' })) ?? {};
+  } catch {
+    /* ignora; usa padrões */
+  }
+  // Nada ligado (padrão da task 29): só a lista aparece (task 28, critério 4) —
+  // evita tocar no código e na aba à toa.
+  if (config.autocopiar !== true && !config.autofill?.habilitado) return;
+  // Reaproveita o código já buscado pela lista — sem GET_CODE_LOCALHOST extra.
+  const codigo = controladores[0]?.codigo;
+  if (!codigo) return;
+  await aplicarCodigoAoAbrir(codigo, config, $('localhost-aviso'));
 }
 
 function ligarEventos() {
@@ -317,21 +336,27 @@ async function executarAcoesAoAbrir(decisao) {
   }
   const resp = await enviar({ type: 'GET_CODE', id: decisao.itens[0].id });
   if (!resp?.ok) return;
+  await aplicarCodigoAoAbrir(resp.codigo, config, $('principal-aviso'));
+}
 
+// Regra única de copiar/preencher/avisar/fechar para o código do MFA único ao
+// abrir. Compartilhada entre a tela principal (task 15) e o fluxo localhost sem
+// senha mestra (task 28), para as duas se comportarem igual.
+async function aplicarCodigoAoAbrir(codigo, config, elAviso) {
   let copiou = false;
-  if (config.autocopiar !== false) {
-    // padrão: ligado (task 24)
+  if (config.autocopiar === true) {
+    // opt-in; padrão desligado (task 29)
     try {
-      await copiarParaClipboard(resp.codigo);
+      await copiarParaClipboard(codigo);
       copiou = true;
     } catch {
       /* clipboard indisponível: silencioso, o usuário ainda pode clicar */
     }
   }
-  const preencheu = await preencherNaAba(config.autofill, resp.codigo);
-  if (preencheu && copiou) dizer($('principal-aviso'), 'Código copiado e preenchido na página ✓');
-  else if (preencheu) dizer($('principal-aviso'), 'Código preenchido na página ✓');
-  else if (copiou) dizer($('principal-aviso'), 'Código copiado automaticamente ✓');
+  const preencheu = await preencherNaAba(config.autofill, codigo);
+  if (preencheu && copiou) dizer(elAviso, 'Código copiado e preenchido na página ✓');
+  else if (preencheu) dizer(elAviso, 'Código preenchido na página ✓');
+  else if (copiou) dizer(elAviso, 'Código copiado automaticamente ✓');
 
   // Fecha o popup sozinho quando o autopreenchimento der certo (opção opt-in).
   if (preencheu && config.autofill?.fecharAoPreencher) window.close();
@@ -581,7 +606,7 @@ async function abrirConfig() {
   limpar($('geral-status'));
   const resp = await enviar({ type: 'GET_CONFIG' });
   if (!resp?.ok) return;
-  $('geral-autocopiar').checked = resp.autocopiar !== false;
+  $('geral-autocopiar').checked = resp.autocopiar === true;
   $('sessao-minutos').value = (resp.sessaoTimeoutMs / 60000).toString();
   const c = resp.rateLimit;
   $('rl-livres').value = c.livres;

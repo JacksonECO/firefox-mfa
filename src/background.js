@@ -346,6 +346,19 @@ export async function rotear(mensagem) {
       return { ok: true, rateLimit, autofill, sessaoTimeoutMs, autocopiar };
     }
 
+    case 'GET_CONFIG_PUBLICO': {
+      // Config NÃO sensível necessária para as ações "ao abrir" (autocópia/
+      // autopreenchimento) no fluxo localhost sem senha mestra (task 28). NÃO
+      // exige sessão e NÃO expõe nada secreto: só os flags de autocópia e a
+      // config de autofill (seletores CSS / mapa de domínios). Nunca toca em
+      // segredo, chave, salt nem valor de controle.
+      const autofill = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      const autocopiar = await storage.obterAutocopiar();
+      return { ok: true, autocopiar, autofill };
+    }
+
     case 'SET_AUTOCOPY': {
       if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
       sessao.registrarAtividade();

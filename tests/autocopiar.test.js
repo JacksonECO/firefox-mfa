@@ -10,8 +10,26 @@ beforeEach(async () => {
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
 });
 
-test('autocópia vem habilitada por padrão', async () => {
+test('autocópia vem DESLIGADA por padrão (task 29)', async () => {
   const r = await bg.rotear({ type: 'GET_CONFIG' });
+  assert.equal(r.autocopiar, false);
+});
+
+test('GET_CONFIG_PUBLICO devolve autocopiar/autofill sem exigir sessão (task 28)', async () => {
+  await bg.rotear({ type: 'LOCK' });
+  const r = await bg.rotear({ type: 'GET_CONFIG_PUBLICO' });
+  assert.equal(r.ok, true);
+  assert.equal(r.autocopiar, false); // padrão desligado
+  assert.ok(r.autofill && typeof r.autofill === 'object');
+  // não expõe config sensível/extra sem sessão
+  assert.equal(r.rateLimit, undefined);
+  assert.equal(r.sessaoTimeoutMs, undefined);
+});
+
+test('GET_CONFIG_PUBLICO reflete o que foi salvo (task 28)', async () => {
+  await bg.rotear({ type: 'SET_AUTOCOPY', habilitado: true });
+  await bg.rotear({ type: 'LOCK' });
+  const r = await bg.rotear({ type: 'GET_CONFIG_PUBLICO' });
   assert.equal(r.autocopiar, true);
 });
 

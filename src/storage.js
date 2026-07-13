@@ -156,11 +156,15 @@ export async function salvarTimeoutSessao(ms) {
   await area().set({ [CHAVE_TIMEOUT_SESSAO]: ms });
 }
 
-/** Autocópia ligada? Padrão: ligada (comportamento original da task 15). */
+/**
+ * Autocópia ligada? Padrão: DESLIGADA (task 29). Mexe na área de transferência
+ * sem clique e pode sobrescrever um segredo que o usuário acabou de copiar para
+ * cadastrar um novo MFA — por isso é opt-in.
+ */
 export async function obterAutocopiar() {
   const dados = await area().get(CHAVE_AUTOCOPIAR);
   const v = dados[CHAVE_AUTOCOPIAR];
-  return typeof v === 'boolean' ? v : true;
+  return typeof v === 'boolean' ? v : false;
 }
 
 export async function salvarAutocopiar(habilitado) {

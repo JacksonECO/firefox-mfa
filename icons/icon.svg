@@ -3,12 +3,24 @@
     <clipPath id="rounded">
       <rect x="0" y="0" width="128" height="128" rx="28" ry="28"/>
     </clipPath>
+    <linearGradient id="fundo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1f2e"/>
+      <stop offset="1" stop-color="#10131c"/>
+    </linearGradient>
+    <linearGradient id="escudo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#5457e5"/>
+    </linearGradient>
   </defs>
   <g clip-path="url(#rounded)">
-    <rect x="0" y="0" width="128" height="128" fill="#10131c"/>
-    <path d="M64 18 L102 33 V63 C102 89 86 105 64 113 C42 105 26 89 26 63 V33 Z"
-          fill="#6366f1"/>
-    <circle cx="64" cy="60" r="11" fill="#eef2ff"/>
-    <path d="M60 60 H68 L66 84 H62 Z" fill="#eef2ff"/>
+    <rect x="0" y="0" width="128" height="128" fill="url(#fundo)"/>
+    <!-- escudo -->
+    <path d="M64 16 L104 32 V64 C104 91 87 108 64 116 C41 108 24 91 24 64 V32 Z"
+          fill="url(#escudo)"/>
+    <path d="M64 16 L104 32 V64 C104 91 87 108 64 116 C41 108 24 91 24 64 V32 Z"
+          fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
+    <!-- fechadura -->
+    <circle cx="64" cy="58" r="11" fill="#eef2ff"/>
+    <path d="M59.5 58 H68.5 L66 84 H62 Z" fill="#eef2ff"/>
   </g>
 </svg>

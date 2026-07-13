@@ -110,6 +110,7 @@
           Acesso local sem senha mestra. Aparecem só os MFAs de localhost cadastrados sem
           criptografia. Entre com a senha mestra para acesso completo.
         </p>
+        <p class="principal__aviso" id="localhost-aviso" role="status"></p>
         <ul class="lista" id="localhost-lista"></ul>
         <button class="btn" id="localhost-entrar" type="button">Entrar com a senha mestra</button>
       </section>
@@ -129,6 +130,11 @@
               Copiar o código automaticamente ao abrir (quando há só 1 MFA do site)
             </span>
           </label>
+          <p class="config__ajuda config__ajuda--aviso">
+            ⚠️ Pode atrapalhar o cadastro de novos MFAs: ao abrir o popup, sobrescreve a área de
+            transferência com o código de 6 dígitos, apagando um segredo que você tenha acabado
+            de copiar para colar no formulário. Desligada por padrão.
+          </p>
           <button class="btn" type="submit">Salvar</button>
           <p class="form__status" id="geral-status" role="status"></p>
         </form>

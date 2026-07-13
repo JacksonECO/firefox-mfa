@@ -41,6 +41,7 @@ export function pararTicker() {
  * @param {HTMLElement} container
  * @param {Array} itens metadados dos MFAs (id, nome, dominio)
  * @param {{obterCodigo: (id:string)=>Promise<any>, aoEditar: (id:string)=>void}} cbs
+ * @returns {Promise<Array>} os controladores criados (cada um expõe `.codigo`).
  */
 export async function renderizarLista(container, itens, { obterCodigo, aoEditar }) {
   pararTicker();
@@ -53,6 +54,7 @@ export async function renderizarLista(container, itens, { obterCodigo, aoEditar 
   await Promise.all(controladores.map((c) => c.atualizarCodigo()));
   tique();
   ticker = setInterval(tique, 1000);
+  return controladores;
 }
 
 function tique() {
@@ -89,6 +91,11 @@ function criarCard(template, mfa, { obterCodigo, aoEditar }) {
   const controlador = {
     el,
     janela: null,
+    // Último código buscado, para as ações "ao abrir" (task 28) reaproveitarem
+    // o valor já renderizado em vez de refazer GET_CODE / GET_CODE_LOCALHOST.
+    get codigo() {
+      return codigoAtual;
+    },
     async atualizarCodigo() {
       const resp = await obterCodigo(mfa.id);
       if (resp?.ok && typeof resp.codigo === 'string') {

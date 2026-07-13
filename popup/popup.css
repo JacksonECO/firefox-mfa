@@ -285,6 +285,10 @@ body.pagina {
   color: var(--color-muted);
 }
 
+.config__ajuda--aviso {
+  color: var(--color-warning);
+}
+
 .config__ajuda code {
   font-family: var(--font-mono);
   font-size: 11px;
