@@ -17,6 +17,7 @@ import { gerarTOTP, segundosRestantes } from './totp.js';
 import { exportarDados, importarDados } from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
 import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
+import { preencherLogin, resolverSeletorLogin } from './autofilllogin.js';
 import { normalizarTimeout, TIMEOUT_PADRAO_MS } from './sessaoconfig.js';
 
 /** Coleta as configurações atuais (não sensíveis) para exportar. */
@@ -112,6 +113,51 @@ async function listaDeMetadadosConta(contas, chave) {
   return saida;
 }
 
+/** A conta que recebe o autopreenchimento: a escolhida, senão a principal. */
+function escolherConta(contas, contaId) {
+  if (contaId) return contas.find((c) => c.id === contaId) ?? null;
+  return contas.find((c) => c.principal === true) ?? contas[0] ?? null;
+}
+
+/**
+ * Injeta e-mail e senha na aba. A senha em claro existe apenas neste escopo do
+ * background e vai direto para o `executeScript` — nunca passa pelo popup nem
+ * é registrada em log. (Strings JS são imutáveis: não há `.fill(0)` possível
+ * aqui; o que fazemos é manter o escopo mínimo e soltar a referência.)
+ */
+async function preencherLoginNaAba({ conta, chave, tabId }) {
+  if (!conta) return { ok: false, erro: 'SEM_CONTA' };
+  if (typeof tabId !== 'number') return { ok: false, erro: 'SEM_ABA' };
+  if (!globalThis.browser?.scripting?.executeScript) return { ok: false, erro: 'SEM_SCRIPTING' };
+
+  const config = normalizarConfigAutofill((await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO);
+  const seletores = resolverSeletorLogin(config, conta.dominio);
+  let credenciais;
+  try {
+    credenciais = await lerCredenciais(conta, chave);
+  } catch {
+    return { ok: false, erro: 'FALHA' };
+  }
+  try {
+    const [resultado] = await browser.scripting.executeScript({
+      target: { tabId },
+      func: preencherLogin,
+      args: [
+        seletores.email,
+        seletores.senha,
+        credenciais.email,
+        credenciais.senha,
+        config.login.submeter === true,
+      ],
+    });
+    return { ok: true, preencheu: resultado?.result?.ok === true };
+  } catch {
+    return { ok: false, erro: 'FALHA_INJECAO' }; // aba restrita / sem permissão
+  } finally {
+    credenciais = null;
+  }
+}
+
 /**
  * Roteia uma mensagem vinda do popup. Retorna sempre um objeto serializável —
  * nunca a CryptoKey nem um segredo em claro.
@@ -136,6 +182,7 @@ async function listaDeMetadadosConta(contas, chave) {
  *  - REVEAL_CONTA       → { ok, email, senha } (só na edição)    (task 30)
  *  - SAVE_CONTA / UPDATE_CONTA / DELETE_CONTA                    (task 30)
  *  - SET_CONTA_PRINCIPAL → { ok, contas }                        (task 30)
+ *  - AUTOFILL_LOGIN     → { ok, preencheu } (injeta na aba)      (task 30)
  */
 export async function rotear(mensagem) {
   switch (mensagem?.type) {
@@ -445,6 +492,50 @@ export async function rotear(mensagem) {
           c.semCriptografia === true && c.dominio === mensagem.dominio && ehLocalhost(c.dominio),
       );
       return { ok: true, contas: await listaDeMetadadosConta(locais, null) };
+    }
+
+    case 'AUTOFILL_LOGIN': {
+      // A senha vai do background direto para a aba — o popup só pede.
+      // `habilitado` governa a ação automática ao abrir; um pedido explícito do
+      // usuário (manual) vale mesmo com a opção automática desligada.
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const config = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      if (!config.login.habilitado && mensagem.manual !== true) {
+        return { ok: false, erro: 'DESABILITADO' };
+      }
+      const dominio = normalizarDominio(mensagem.dominio);
+      if (dominio === null) return { ok: false, erro: 'SEM_DOMINIO' };
+      const contas = await storage.listarContasPorDominio(dominio);
+      return preencherLoginNaAba({
+        conta: escolherConta(contas, mensagem.contaId),
+        chave,
+        tabId: mensagem.tabId,
+      });
+    }
+
+    case 'AUTOFILL_LOGIN_LOCALHOST': {
+      // Fluxo localhost sem senha mestra: só contas sem criptografia do host
+      // local — mesmo guard duplo do LIST_CONTAS_LOCALHOST.
+      if (!ehLocalhost(mensagem.dominio)) return { ok: false, erro: 'NAO_PERMITIDO' };
+      const config = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      if (!config.login.habilitado && mensagem.manual !== true) {
+        return { ok: false, erro: 'DESABILITADO' };
+      }
+      const todas = await storage.listarContas();
+      const locais = todas.filter(
+        (c) =>
+          c.semCriptografia === true && c.dominio === mensagem.dominio && ehLocalhost(c.dominio),
+      );
+      return preencherLoginNaAba({
+        conta: escolherConta(locais, mensagem.contaId),
+        chave: null,
+        tabId: mensagem.tabId,
+      });
     }
 
     case 'EXPORT_DATA': {
