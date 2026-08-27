@@ -9,17 +9,16 @@ Extensão (plug-in) para **Firefox** que gerencia códigos **MFA / TOTP** (RFC 6
 substituindo apps de autenticação externos. Dois diferenciais norteiam **toda** decisão:
 
 1. **Foco no domínio atual** — o popup mostra por padrão só os MFAs do domínio da aba ativa.
-2. **Segurança das chaves** — segredos TOTP sempre criptografados em repouso, decriptados só
-   em memória, 100% local, sem rede.
+2. **Segurança das chaves** — segredos TOTP **e credenciais do site (e-mail/senha)** sempre
+   criptografados em repouso, decriptados só em memória, 100% local, sem rede.
 
 O planejamento completo está em [`ia/`](./ia/), começando por
 [`ia/00-resumo-do-projeto.md`](./ia/00-resumo-do-projeto.md) (norte do produto + roadmap das
 14 tasks). **Cada task em `ia/` é a fonte de verdade da funcionalidade correspondente** —
 consulte o arquivo da task antes de implementá-la.
 
-> Estado atual: repositório em fase de planejamento. Existem os docs em `ia/` e a `LICENSE`;
-> o código da extensão ainda não foi escrito. Ao começar a implementar, siga a estrutura e a
-> ordem definidas nas tasks.
+> Estado atual: MVP implementado. Além dos MFAs, o cofre guarda **contas do site** (e-mail +
+> senha por domínio, task 30) e a exportação é seletiva (task 31).
 
 ## Stack e estrutura
 
@@ -41,6 +40,8 @@ Estrutura de pastas planejada (ver `ia/01`):
   background.js   service worker — DONO de toda crypto e segredo em claro
   storage.js      única camada que toca browser.storage.local
   dominio.js      extrairDominioDaAba(tab) — utilitário compartilhado
+  conta.js        validação pura das contas do site (e-mail/senha por domínio)
+  autofilllogin.js  seletores + função injetada do autopreenchimento de login
 ```
 
 ## Regras de segurança (inegociáveis)
@@ -55,21 +56,26 @@ nenhuma task** — uma mudança que comprometa qualquer uma delas está errada:
    opção do usuário no cadastro, **sem criptografia** (`secretEmClaro` + `semCriptografia:true`)
    — isso libera vê-los sem a senha mestra, mas é estritamente isolado a localhost (validado no
    background) e nunca se aplica a outros domínios. É um trade-off de conveniência de dev, não
-   o caminho padrão.
+   o caminho padrão. A mesma exceção, com a mesma validação, vale para as **contas do site** de
+   localhost (`emailEmClaro`/`senhaEmClaro`, task 30).
 2. **Toda crypto vive no `background.js`.** Todo código que toca a senha mestra, a `CryptoKey`
    ou um segredo em claro roda **exclusivamente** no service worker. O popup só troca mensagens
-   (`UNLOCK`, `LIST_MFAS`, `GET_CODE`, `SAVE_MFA`, `REVEAL_SECRET`) — nunca recebe a chave nem
-   o segredo bruto. Motivo técnico: o popup é destruído ao perder foco e uma `CryptoKey`
+   (`UNLOCK`, `LIST_MFAS`, `GET_CODE`, `SAVE_MFA`, `REVEAL_SECRET`, `LIST_CONTAS`,
+   `REVEAL_CONTA`, `AUTOFILL_LOGIN`) — nunca recebe a chave nem o segredo bruto. **A senha de
+   uma conta do site sai do background em um ponto só: `REVEAL_CONTA`** (formulário de edição,
+   mesma exceção deliberada do `REVEAL_SECRET`); no autopreenchimento quem injeta na aba é o
+   próprio background, para a senha não passar pelo popup. Motivo técnico: o popup é destruído ao perder foco e uma `CryptoKey`
    não-extraível não atravessa `runtime.sendMessage`. Motivo de segurança: o popup renderiza
    dados do usuário e é a maior superfície de XSS.
 3. **Derivação de chave forte.** PBKDF2 com **SHA-256** e **600.000 iterações** (OWASP), salt
    aleatório de 16 bytes. AES-GCM com **IV aleatório de 12 bytes por registro** — nunca reusar
-   IV com a mesma chave.
+   IV com a mesma chave. Numa conta do site, e-mail e senha são campos cifrados separados, cada
+   um com o **seu próprio IV**.
 4. **Verificação timing-safe.** Validar a senha mestra apenas pelo sucesso/falha do
    `crypto.subtle.decrypt` sobre o valor de controle (a tag AES-GCM é checada em tempo
    constante pelo navegador). **Nunca** comparar strings manualmente como critério de validação.
-5. **Sanitização: `textContent`, nunca `innerHTML`.** `nome` e `dominio` são texto livre do
-   usuário. Ao renderizar, usar exclusivamente `textContent` / DOM API programática. Um nome
+5. **Sanitização: `textContent`, nunca `innerHTML`.** `nome`, `dominio`, `rotulo` e `email` são
+   texto livre do usuário. Ao renderizar, usar exclusivamente `textContent` / DOM API programática. Um nome
    contendo `<script>` deve aparecer como texto literal. Os caracteres especiais são aceitos na
    entrada — a defesa é na renderização, não bloqueando a digitação.
 6. **Rate limiting é MVP.** Atraso progressivo após tentativas erradas de senha mestra
@@ -110,7 +116,7 @@ nenhuma task** — uma mudança que comprometa qualquer uma delas está errada:
 
 ## Modelo de dados
 
-Registro de MFA (ver `ia/03`):
+Registro de MFA — coleção `mfaItems` (ver `ia/03`):
 
 ```js
 {
@@ -124,11 +130,31 @@ Registro de MFA (ver `ia/03`):
 }
 ```
 
+Conta do site — coleção `credItems` (ver `ia/30`):
+
+```js
+{
+  id: string,                  // uuid
+  dominio: string,             // OBRIGATÓRIO — é a chave de vínculo com o site
+  rotulo: string | null,       // opcional ("Pessoal", "Trabalho")
+  emailCriptografado: string,  // base64 do ciphertext AES-GCM
+  ivEmail: string,             // base64, IV próprio
+  senhaCriptografada: string,  // base64 do ciphertext AES-GCM
+  ivSenha: string,             // base64, IV próprio (nunca igual ao do e-mail)
+  principal: boolean,          // exatamente uma por domínio
+  createdAt: number,
+  updatedAt: number,
+}
+```
+
 - `src/storage.js` é a **única** parte do código que acessa `browser.storage.local` direto.
 - Comparação de domínio é **exata** (`www.x.com` ≠ `x.com`); `hostname` já vem minúsculo do
   parser nativo de URL.
+- **Exatamente uma conta principal por domínio** é uma invariante do storage, não da UI:
+  criar a primeira promove; excluir a principal promove a mais antiga restante; importar um
+  backup nunca rouba a principal de quem já tem uma.
 - `schemaVersion` (metadado não sensível) versiona o schema para migrações futuras (ver
-  `ia/11`).
+  `ia/11`). A v2 introduziu `credItems`.
 
 ## Testes
 
@@ -140,6 +166,11 @@ Registro de MFA (ver `ia/03`):
 - Cobrir bordas: IV trocado deve falhar; fronteira exata da janela de 30s; domínios com porta,
   IP literal, subdomínio, case e aba sem `url`; falha de clipboard não deve mostrar "copiado";
   renderização de `nome`/`dominio` com markup deve usar `textContent`.
+- Contas: nada em claro no storage, IVs distintos por campo, a invariante de conta principal em
+  todas as escritas (criar, trocar, excluir, mudar de domínio, importar) e o fato de que uma
+  listagem **nunca** devolve a senha.
+- Sem build step e sem DOM nos testes, `popup-estrutura.test.js` confere que todo id usado no
+  JS existe no HTML — um rename quebraria a tela só em runtime.
 - Cada task em `ia/` lista seus critérios de aceite manuais e testes automatizados — siga-os.
 
 ## Convenções de trabalho

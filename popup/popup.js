@@ -57,6 +57,7 @@ let voltarDeContas = 'principal'; // para onde a LISTA de contas volta: principa
 let voltarDoConta = 'contas'; // para onde o FORMULÁRIO de conta volta: contas|principal
 let alvoExclusao = null; // { tipo: 'mfa' | 'conta', id } — diálogo compartilhado
 let configAutofillCache = null; // config completa, p/ salvar um bloco sem perder o outro
+let rascunhoMfa = null; // formulário de MFA guardado ao sair para as contas
 
 /* ------------------------------ navegação ------------------------------ */
 
@@ -742,6 +743,14 @@ function atualizarBlocoContas() {
 function abrirContasDoFormulario() {
   const dominio = normalizarDominio($('mfa-dominio').value);
   if (dominio === null) return;
+  // O formulário de MFA pode estar preenchido pela metade: guarda o que foi
+  // digitado para não obrigar a redigitar ao voltar.
+  rascunhoMfa = {
+    nome: $('mfa-nome').value,
+    dominio: $('mfa-dominio').value,
+    secret: $('mfa-secret').value,
+    semCriptografia: $('mfa-sem-cripto').checked,
+  };
   dominioContas = dominio;
   voltarDeContas = 'formulario';
   if ((contasPorDominio[dominio] ?? 0) > 0) return abrirContas(dominio, 'formulario');
@@ -826,9 +835,17 @@ async function definirContaPrincipal(id) {
   }
 }
 
-function voltarDaListaDeContas() {
-  if (voltarDeContas === 'formulario') return abrirFormulario(edicaoId);
-  return abrirPrincipal();
+async function voltarDaListaDeContas() {
+  if (voltarDeContas !== 'formulario') return abrirPrincipal();
+  await abrirFormulario(edicaoId);
+  if (rascunhoMfa === null) return;
+  $('mfa-nome').value = rascunhoMfa.nome;
+  $('mfa-dominio').value = rascunhoMfa.dominio;
+  $('mfa-secret').value = rascunhoMfa.secret;
+  if (!$('mfa-sem-cripto').disabled) $('mfa-sem-cripto').checked = rascunhoMfa.semCriptografia;
+  rascunhoMfa = null;
+  atualizarOpcaoSemCripto();
+  atualizarBlocoContas();
 }
 
 function voltarDoFormularioDeConta() {
@@ -841,6 +858,9 @@ function voltarDoFormularioDeConta() {
 async function abrirFormularioConta(id, dominio, origem = 'contas') {
   contaEdicaoId = id;
   voltarDoConta = origem;
+  // Entrando pela tela principal, a lista que vem depois de salvar também volta
+  // para lá (e não para um formulário de MFA de uma navegação anterior).
+  if (origem === 'principal') voltarDeContas = 'principal';
   dominioContas = dominio || dominioContas;
   for (const el of [
     'conta-dominio-erro',

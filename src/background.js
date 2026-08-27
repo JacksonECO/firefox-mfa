@@ -130,12 +130,11 @@ function escolherConta(contas, contaId) {
  * é registrada em log. (Strings JS são imutáveis: não há `.fill(0)` possível
  * aqui; o que fazemos é manter o escopo mínimo e soltar a referência.)
  */
-async function preencherLoginNaAba({ conta, chave, tabId }) {
+async function preencherLoginNaAba({ conta, chave, tabId, config }) {
   if (!conta) return { ok: false, erro: 'SEM_CONTA' };
   if (typeof tabId !== 'number') return { ok: false, erro: 'SEM_ABA' };
   if (!globalThis.browser?.scripting?.executeScript) return { ok: false, erro: 'SEM_SCRIPTING' };
 
-  const config = normalizarConfigAutofill((await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO);
   const seletores = resolverSeletorLogin(config, conta.dominio);
   let credenciais;
   try {
@@ -519,6 +518,7 @@ export async function rotear(mensagem) {
         conta: escolherConta(contas, mensagem.contaId),
         chave,
         tabId: mensagem.tabId,
+        config,
       });
     }
 
@@ -541,6 +541,7 @@ export async function rotear(mensagem) {
         conta: escolherConta(locais, mensagem.contaId),
         chave: null,
         tabId: mensagem.tabId,
+        config,
       });
     }
 

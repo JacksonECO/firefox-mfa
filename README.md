@@ -1,19 +1,21 @@
 # MFA Num Toque
 
-Extensão (plug-in) para **Firefox** que gerencia códigos **MFA / TOTP** (RFC 6238),
-substituindo apps de autenticação externos. Dois diferenciais norteiam o produto:
+Extensão (plug-in) para **Firefox** que gerencia códigos **MFA / TOTP** (RFC 6238) e as
+credenciais do site (**e-mail e senha**), substituindo apps de autenticação externos. Dois
+diferenciais norteiam o produto:
 
-1. **Foco no domínio atual** — o popup mostra por padrão só os MFAs do domínio da aba ativa.
-2. **Segurança das chaves** — segredos TOTP sempre criptografados em repouso, decriptados só
-   em memória, 100% local, sem rede.
+1. **Foco no domínio atual** — o popup mostra por padrão só o que é do domínio da aba ativa.
+2. **Segurança das chaves** — segredos TOTP e credenciais sempre criptografados em repouso,
+   decriptados só em memória, 100% local, sem rede.
 
 O planejamento completo está em [`ia/`](./ia/) (começando por
 [`ia/00-resumo-do-projeto.md`](./ia/00-resumo-do-projeto.md)). As regras de segurança e design
 estão em [`CLAUDE.md`](./CLAUDE.md).
 
-> **Estado atual:** MVP funcionalmente completo (tasks 01–14). Senha mestra, cadastro,
-> listagem por domínio, geração de TOTP, copiar código, edição/exclusão, rate limiting,
-> versionamento de schema, hardening, design system e exportar/importar.
+> **Estado atual:** MVP funcionalmente completo. Senha mestra, cadastro, listagem por domínio,
+> geração de TOTP, copiar código, edição/exclusão, rate limiting, versionamento de schema,
+> hardening, design system, autopreenchimento, **contas do site (e-mail e senha por domínio)**
+> e exportar/importar com seleção de domínios e tipos de dado.
 
 ## Como instalar (passo a passo)
 
@@ -35,7 +37,7 @@ step: o código é carregado direto.
    mestra (mínimo 3 caracteres; um indicador mostra a força com base em tamanho, maiúsculas,
    minúsculas, números e caracteres especiais) e confirme. Ela protege todos os seus códigos e
    **não pode ser recuperada** se esquecida — guarde-a bem.
-2. **Cadastrar um MFA.** Na tela principal, clique em **"+ Adicionar novo"**. Preencha:
+2. **Cadastrar um MFA.** Na tela principal, clique em **"+ Novo MFA"**. Preencha:
    - **Nome** (obrigatório): ex. "GitHub".
    - **Site (domínio)** (opcional): já vem pré-preenchido com o domínio da aba atual; pode
      editar ou apagar.
@@ -53,18 +55,26 @@ step: o código é carregado direto.
    **"Ver todos" / "Ver deste site"** para alternar.
 5. **Editar ou excluir.** Clique no ícone de lápis (✎) de um card para editar nome, domínio ou
    segredo, ou para **excluir** (com confirmação).
-6. **Bloqueio automático.** Após **2 minutos** de inatividade a sessão expira e a senha mestra
+6. **Salvar e-mail e senha do site.** Clique em **"+ E-mail e senha"** (ou, no formulário de um
+   MFA, no bloco "E-mail e senha deste site"). Informe o site, o **e-mail ou usuário** e a
+   **senha** — e, se quiser, um **rótulo** ("Pessoal", "Trabalho"). Dá para salvar **várias
+   contas por site**: o switch **"Principal"** escolhe qual delas o autopreenchimento usa.
+   Sites que têm conta salva mostram um **ícone** no card; clicar nele preenche o login na
+   página aberta. As senhas ficam criptografadas do mesmo jeito que os segredos MFA e só
+   aparecem na tela de edição da conta.
+7. **Bloqueio automático.** Após **2 minutos** de inatividade a sessão expira e a senha mestra
    é pedida de novo. Errar a senha repetidamente aplica um atraso progressivo (proteção contra
    força bruta).
-7. **Backup (exportar / importar).** Na tela principal, em **"Exportar"**, defina uma senha de
-   exportação (independente da senha mestra) e baixe o arquivo `.json` criptografado. Para
-   restaurar (no mesmo Firefox ou em outro), use **"Importar"**, selecione o arquivo e informe
-   a senha de exportação.
-8. **Configurações.** Em **"Configurações"** (rodapé da tela principal) você pode: ajustar o
+8. **Backup (exportar / importar).** Em **"Backup"**, escolha **o que** exportar (códigos MFA,
+   contas do site, configurações) e **de quais sites**. Exportar pede **a senha mestra** (é o
+   momento em que os dados existem em claro) e uma **senha de exportação** independente, que
+   criptografa o arquivo `.json`. Para restaurar (no mesmo Firefox ou em outro), use
+   **"Importar"**, selecione o arquivo e informe a senha de exportação.
+9. **Configurações.** Em **"Configurações"** (rodapé da tela principal) você pode: ajustar o
    tempo de sessão, a proteção contra tentativas de senha (atrasos), **trocar a senha mestra**
-   (recriptografa tudo) e habilitar o **autopreenchimento** — informando um seletor CSS do
-   campo de código do site para que, com 1 MFA, o código seja inserido e enviado
-   automaticamente. Como configurar o seletor: veja
+   (recriptografa tudo) e habilitar os **autopreenchimentos** — o do **código** (seletor CSS do
+   campo de OTP, com 1 MFA no site) e o de **login** (e-mail e senha da conta principal, que
+   por padrão preenche sem enviar o formulário). Como configurar os seletores: veja
    [`docs/autopreenchimento.md`](./docs/autopreenchimento.md).
 
 ## Estrutura do projeto
@@ -80,8 +90,10 @@ step: o código é carregado direto.
     crypto.js       PBKDF2 + AES-GCM (Web Crypto nativa)
     storage.js      única camada que acessa browser.storage.local
     totp.js         TOTP (RFC 6238) via HMAC-SHA1 nativo
+    conta.js        validação das contas do site (e-mail/senha por domínio)
+    autofilllogin.js  seletores + função injetada do autopreenchimento de login
     dominio.js  base32.js  cadastro.js  senha.js  listagem.js  codigo.js
-    ratelimit.js  backup.js
+    ratelimit.js  backup.js  autofill.js  sessaoconfig.js
 /tests/               testes (node:test, sem dependências)
 /scripts/             empacotar.sh — gera o .zip
 /ia/                  docs de planejamento (uma task por arquivo)
@@ -106,8 +118,9 @@ npm test        # ou: node --test
 
 Cobrem criptografia (PBKDF2/AES-GCM), storage/CRUD, sessão (timer de 2 min com fake timers),
 TOTP (vetores oficiais do RFC 6238 Apêndice B), listagem por domínio, rate limiting, migração
-de schema, exportar/importar e uma auditoria estática de hardening. Requer **Node 20+**
-(Web Crypto global e `mock.timers`).
+de schema, contas do site (cifragem, conta principal, localhost), autopreenchimento de login,
+exportar/importar com filtro e duas auditorias estáticas (hardening e consistência entre o HTML
+e o JS do popup). Requer **Node 20+** (Web Crypto global e `mock.timers`).
 
 ## Segurança
 
@@ -116,6 +129,12 @@ de schema, exportar/importar e uma auditoria estática de hardening. Requer **No
   AES-GCM que vive **só em memória** do background e expira em 2 min de inatividade.
 - **Segredos sempre criptografados em repouso** (AES-GCM, IV aleatório por registro). Só são
   decriptados em memória, no instante de gerar o código.
+- **E-mail e senha das contas também são criptografados**, cada campo com o seu próprio IV. A
+  listagem de contas decifra só o e-mail (para você distinguir as contas); a senha sai do
+  background apenas na tela de edição. No autopreenchimento, quem injeta a senha na página é o
+  próprio background — ela nunca passa pelo popup.
+- **Exportar exige a senha mestra**, além da senha que criptografa o arquivo, e a verificação
+  passa pelo mesmo atraso progressivo do desbloqueio.
 - **CSP explícita** no manifest (`script-src 'self'; object-src 'self'`) e **permissões
   mínimas** (veja abaixo).
 - **Zero dependências de terceiros.** Toda a criptografia usa a Web Crypto API nativa; o TOTP é
@@ -123,8 +142,8 @@ de schema, exportar/importar e uma auditoria estática de hardening. Requer **No
   supply-chain.
 - **Isolamento de storage.** `browser.storage.local` é isolado por extensão no modelo de
   segurança do WebExtensions — outra extensão instalada não acessa estes dados.
-- **Renderização segura.** `nome`/`dominio` (texto livre do usuário) são sempre inseridos via
-  `textContent`/DOM API, nunca `innerHTML` — sem XSS via dados armazenados.
+- **Renderização segura.** `nome`, `dominio`, `rotulo` e `email` (texto livre do usuário) são
+  sempre inseridos via `textContent`/DOM API, nunca `innerHTML` — sem XSS via dados armazenados.
 
 ### Permissões do manifest
 
@@ -134,7 +153,7 @@ de schema, exportar/importar e uma auditoria estática de hardening. Requer **No
 | `alarms`         | Expirar a chave da sessão após 2 min de inatividade.                |
 | `activeTab`      | Ler **apenas** o domínio da aba ativa (pré-preencher/filtrar) e injetar o código no autopreenchimento. |
 | `clipboardWrite` | Copiar o código de 6 dígitos (clique ou autocópia).                |
-| `scripting`      | Autopreenchimento opt-in: inserir o código (nunca o segredo) no campo da página. |
+| `scripting`      | Autopreenchimento opt-in: inserir o código (nunca o segredo do MFA) e, se você salvar contas, o e-mail e a senha nos campos da página. |
 
 Nenhuma permissão ampla (`tabs` genérica, `<all_urls>`, `http://*/*`).
 

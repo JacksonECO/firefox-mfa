@@ -103,6 +103,8 @@ uma única funcionalidade.
 | 24 | [Config da autocópia](./24-config-autocopia.md) | Liga/desliga a cópia automática ao abrir |
 | 25 | [Exportar/importar configurações](./25-importar-configuracoes.md) | Backup inclui ajustes; importar é opcional |
 | 26 | [MFAs de localhost sem criptografia](./26-localhost-sem-criptografia.md) | Fluxo isolado em localhost sem senha mestra (opt-in) |
+| 30 | [Contas do site: e-mail e senha por domínio](./30-contas-email-senha-por-dominio.md) | Credenciais cifradas por domínio, conta principal e autopreenchimento do login |
+| 31 | [Exportação seletiva](./31-exportacao-seletiva.md) | Escolher domínios e tipos de dado; senha mestra obrigatória para exportar |
 
 ## Princípios que não devem ser violados em nenhuma task
 

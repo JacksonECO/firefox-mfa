@@ -8,6 +8,7 @@ module.exports = {
     'tests/**',
     'scripts/**',
     'docs/**',
+    'examples/**',
     'web-ext-artifacts/**',
     'package.json',
     'README.md',
