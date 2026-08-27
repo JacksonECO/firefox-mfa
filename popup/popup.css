@@ -754,7 +754,7 @@ body.pagina {
 }
 
 .switch__texto {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--color-muted);
 }
 
