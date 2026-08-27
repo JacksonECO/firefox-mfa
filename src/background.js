@@ -11,7 +11,8 @@ import * as sessao from './sessao.js';
 import * as storage from './storage.js';
 import * as cripto from './crypto.js';
 import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
-import { ehLocalhost } from './dominio.js';
+import { validarConta } from './conta.js';
+import { ehLocalhost, normalizarDominio } from './dominio.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
 import { exportarDados, importarDados } from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
@@ -65,6 +66,53 @@ async function lerSegredo(mfa, chave) {
 }
 
 /**
+ * Lê e-mail e senha de uma conta: em claro se for localhost sem cripto, senão
+ * decripta cada campo com o seu próprio IV. Só é chamada onde o valor em claro
+ * é realmente necessário (revelar na edição, autopreencher, exportar).
+ */
+async function lerCredenciais(conta, chave) {
+  if (conta.semCriptografia) {
+    return { email: conta.emailEmClaro, senha: conta.senhaEmClaro };
+  }
+  return {
+    email: await cripto.descriptografar(conta.emailCriptografado, conta.ivEmail, chave),
+    senha: await cripto.descriptografar(conta.senhaCriptografada, conta.ivSenha, chave),
+  };
+}
+
+/**
+ * Metadados de uma conta para a UI: inclui o e-mail (necessário para identificar
+ * a conta na lista) e NUNCA a senha. Se a leitura do e-mail falhar (registro
+ * corrompido), devolve o item marcado em vez de derrubar a listagem inteira.
+ */
+async function metadadosConta(conta, chave) {
+  const base = {
+    id: conta.id,
+    dominio: conta.dominio,
+    rotulo: conta.rotulo ?? null,
+    principal: conta.principal === true,
+    semCriptografia: conta.semCriptografia === true,
+    createdAt: conta.createdAt,
+    updatedAt: conta.updatedAt,
+  };
+  try {
+    const email = conta.semCriptografia
+      ? conta.emailEmClaro
+      : await cripto.descriptografar(conta.emailCriptografado, conta.ivEmail, chave);
+    return { ...base, email };
+  } catch {
+    return { ...base, email: '', falhaLeitura: true };
+  }
+}
+
+/** Aplica `metadadosConta` a uma lista, preservando a ordem. */
+async function listaDeMetadadosConta(contas, chave) {
+  const saida = [];
+  for (const conta of contas) saida.push(await metadadosConta(conta, chave));
+  return saida;
+}
+
+/**
  * Roteia uma mensagem vinda do popup. Retorna sempre um objeto serializável —
  * nunca a CryptoKey nem um segredo em claro.
  *
@@ -83,6 +131,11 @@ async function lerSegredo(mfa, chave) {
  *  - DELETE_MFA         → { ok, removidos }                     (task 09)
  *  - EXPORT_DATA        → { ok, arquivo }                       (task 14)
  *  - IMPORT_DATA        → { ok, importados }                    (task 14)
+ *  - LIST_CONTAS        → { ok, contas } (com e-mail, sem senha) (task 30)
+ *  - CONTAS_RESUMO      → { ok, porDominio } (só contagem)       (task 30)
+ *  - REVEAL_CONTA       → { ok, email, senha } (só na edição)    (task 30)
+ *  - SAVE_CONTA / UPDATE_CONTA / DELETE_CONTA                    (task 30)
+ *  - SET_CONTA_PRINCIPAL → { ok, contas }                        (task 30)
  */
 export async function rotear(mensagem) {
   switch (mensagem?.type) {
@@ -270,6 +323,128 @@ export async function rotear(mensagem) {
       sessao.registrarAtividade();
       const removidos = await storage.removerMfa(mensagem.id);
       return { ok: true, removidos };
+    }
+
+    /* ------------- contas do site: e-mail + senha por domínio (task 30) -------------
+     * A senha do site só sai daqui em REVEAL_CONTA (fluxo de edição, mesma
+     * exceção deliberada do REVEAL_SECRET) e no autopreenchimento, que injeta
+     * direto na aba a partir do background — o popup nunca a recebe. */
+
+    case 'LIST_CONTAS': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const dominio = normalizarDominio(mensagem.dominio);
+      const contas =
+        dominio === null ? await storage.listarContas() : await storage.listarContasPorDominio(dominio);
+      return { ok: true, contas: await listaDeMetadadosConta(contas, chave) };
+    }
+
+    case 'CONTAS_RESUMO': {
+      // Só contagem por domínio — não decripta nada. Alimenta o ícone dos cards.
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      return { ok: true, porDominio: await storage.contarContasPorDominio() };
+    }
+
+    case 'REVEAL_CONTA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const conta = await storage.obterConta(mensagem.id);
+      if (!conta) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      try {
+        const { email, senha } = await lerCredenciais(conta, chave);
+        return { ok: true, email, senha };
+      } catch {
+        return { ok: false, erro: 'FALHA' };
+      }
+    }
+
+    case 'SAVE_CONTA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      // Defesa em profundidade: revalida no background, sem confiar no popup.
+      const validacao = validarConta({
+        dominio: mensagem.dominio,
+        email: mensagem.email,
+        senha: mensagem.senha,
+        rotulo: mensagem.rotulo,
+      });
+      if (!validacao.valido) return { ok: false, erros: validacao.erros };
+      try {
+        const dados = { ...validacao.normalizado, principal: mensagem.principal === true };
+        // Opção sem criptografia: estritamente para localhost (task 26).
+        if (mensagem.semCriptografia) {
+          if (!ehLocalhost(dados.dominio)) return { ok: false, erro: 'SEM_CRIPTO_SO_LOCALHOST' };
+          const conta = await storage.salvarContaSemCripto(dados);
+          return { ok: true, conta: await metadadosConta(conta, chave) };
+        }
+        const conta = await storage.salvarConta(dados, chave);
+        return { ok: true, conta: await metadadosConta(conta, chave) };
+      } catch (erro) {
+        return { ok: false, erro: erro.message };
+      }
+    }
+
+    case 'UPDATE_CONTA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      // Senha em branco na edição = manter a atual (não exige o campo).
+      const validacao = validarConta(
+        {
+          dominio: mensagem.dominio,
+          email: mensagem.email,
+          senha: mensagem.senha,
+          rotulo: mensagem.rotulo,
+        },
+        { exigirSenha: false },
+      );
+      if (!validacao.valido) return { ok: false, erros: validacao.erros };
+      const atual = await storage.obterConta(mensagem.id);
+      if (!atual) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      try {
+        const dados = { ...validacao.normalizado, principal: mensagem.principal === true };
+        let conta;
+        if (atual.semCriptografia) {
+          // Segue em claro enquanto o domínio for localhost; ao sair de
+          // localhost, converte para criptografada (conversão de mão única).
+          conta = ehLocalhost(dados.dominio)
+            ? await storage.atualizarContaSemCripto(mensagem.id, dados)
+            : await storage.converterContaParaCriptografada(mensagem.id, dados, chave);
+        } else {
+          conta = await storage.atualizarConta(mensagem.id, dados, chave);
+        }
+        return { ok: true, conta: await metadadosConta(conta, chave) };
+      } catch (erro) {
+        return { ok: false, erro: erro.message };
+      }
+    }
+
+    case 'SET_CONTA_PRINCIPAL': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const conta = await storage.definirContaPrincipal(mensagem.id);
+      if (!conta) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      const doDominio = await storage.listarContasPorDominio(conta.dominio);
+      return { ok: true, contas: await listaDeMetadadosConta(doDominio, chave) };
+    }
+
+    case 'DELETE_CONTA': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const removidos = await storage.removerConta(mensagem.id);
+      return { ok: true, removidos };
+    }
+
+    case 'LIST_CONTAS_LOCALHOST': {
+      // Fluxo localhost SEM senha mestra: só contas sem criptografia daquele
+      // host local. Nunca toca em conta criptografada nem de outro domínio.
+      if (!ehLocalhost(mensagem.dominio)) return { ok: true, contas: [] };
+      const todas = await storage.listarContas();
+      const locais = todas.filter(
+        (c) =>
+          c.semCriptografia === true && c.dominio === mensagem.dominio && ehLocalhost(c.dominio),
+      );
+      return { ok: true, contas: await listaDeMetadadosConta(locais, null) };
     }
 
     case 'EXPORT_DATA': {

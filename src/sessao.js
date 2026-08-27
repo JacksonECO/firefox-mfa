@@ -110,8 +110,9 @@ export async function desbloquear(senha, { esperar = esperaReal } = {}) {
 
 /**
  * Troca a senha mestra (task 17): valida a senha atual, deriva uma nova chave
- * (novo salt) e RECRIPTOGRAFA todos os segredos com ela (novos IVs), tudo em
- * uma escrita atômica. Mantém a sessão aberta com a nova chave.
+ * (novo salt) e RECRIPTOGRAFA todos os segredos com ela (novos IVs) — segredos
+ * de MFA e e-mail/senha das contas do site —, tudo em uma escrita atômica.
+ * Mantém a sessão aberta com a nova chave.
  * @returns {Promise<{ok: boolean, erro?: string}>}
  */
 export async function trocarSenhaMestra(senhaAtual, senhaNova) {
@@ -148,9 +149,38 @@ export async function trocarSenhaMestra(senhaAtual, senhaNova) {
     const { ciphertext, iv } = await cripto.criptografar(segredo, novaChave);
     recifrados.push({ ...mfa, secretCriptografado: ciphertext, iv, updatedAt: agora });
   }
+
+  // Contas do site (task 30): e-mail e senha são recifrados do mesmo jeito, cada
+  // um com o seu novo IV. Contas de localhost sem criptografia não dependem da
+  // chave e seguem como estão.
+  const contas = await storage.listarContas();
+  const contasRecifradas = [];
+  for (const conta of contas) {
+    if (conta.semCriptografia) {
+      contasRecifradas.push(conta);
+      continue;
+    }
+    const email = await cripto.descriptografar(conta.emailCriptografado, conta.ivEmail, chaveAtual);
+    const senha = await cripto.descriptografar(conta.senhaCriptografada, conta.ivSenha, chaveAtual);
+    const cifradoEmail = await cripto.criptografar(email, novaChave);
+    const cifradoSenha = await cripto.criptografar(senha, novaChave);
+    contasRecifradas.push({
+      ...conta,
+      emailCriptografado: cifradoEmail.ciphertext,
+      ivEmail: cifradoEmail.iv,
+      senhaCriptografada: cifradoSenha.ciphertext,
+      ivSenha: cifradoSenha.iv,
+      updatedAt: agora,
+    });
+  }
   const novoControle = await cripto.criptografar(cripto.VALOR_CONTROLE, novaChave);
 
-  await storage.aplicarTrocaSenha({ saltBytes: novoSalt, controle: novoControle, mfas: recifrados });
+  await storage.aplicarTrocaSenha({
+    saltBytes: novoSalt,
+    controle: novoControle,
+    mfas: recifrados,
+    contas: contasRecifradas,
+  });
   ativarSessao(novaChave);
   return { ok: true };
 }
