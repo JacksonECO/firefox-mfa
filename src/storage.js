@@ -12,6 +12,7 @@ import * as cripto from './crypto.js';
 const CHAVE_SALT = 'cryptoSalt';
 const CHAVE_CONTROLE = 'cryptoControle';
 const CHAVE_MFAS = 'mfaItems';
+const CHAVE_CONTAS = 'credItems';
 const CHAVE_SCHEMA = 'schemaVersion';
 const CHAVE_TENTATIVAS = 'mfaUnlockAttempts';
 const CHAVE_ULTIMA_TENTATIVA = 'mfaUnlockLastAttemptAt';
@@ -19,11 +20,22 @@ const CHAVE_CONFIG_RATELIMIT = 'rateLimitConfig';
 const CHAVE_CONFIG_AUTOFILL = 'autofillConfig';
 const CHAVE_TIMEOUT_SESSAO = 'sessionTimeoutMs';
 const CHAVE_AUTOCOPIAR = 'autocopiarHabilitado';
-const SCHEMA_ATUAL = 1;
+const SCHEMA_ATUAL = 2;
 
-// Migrações de schema (task 11). Vazio hoje (só existe a v1). Cada migração
-// futura: { de: N, para: N+1, executar: async () => { ... } }, aplicada em ordem.
-const MIGRACOES = [];
+// Migrações de schema (task 11). Cada migração: { de: N, para: N+1,
+// executar: async () => { ... } }, aplicada em ordem na inicialização.
+const MIGRACOES = [
+  {
+    de: 1,
+    para: 2,
+    // v2 introduz a coleção de contas do site (e-mail + senha por domínio,
+    // task 30). Só garante a chave; não toca em `mfaItems`.
+    async executar() {
+      const dados = await area().get(CHAVE_CONTAS);
+      if (!Array.isArray(dados[CHAVE_CONTAS])) await area().set({ [CHAVE_CONTAS]: [] });
+    },
+  },
+];
 
 export { SCHEMA_ATUAL };
 
@@ -205,15 +217,18 @@ export async function obterMfa(id) {
 
 /**
  * Aplica a troca de senha mestra (task 17) em UMA escrita atômica: novo salt,
- * novo valor de controle, todos os MFAs recriptografados e o contador zerado.
+ * novo valor de controle, todos os MFAs e contas recriptografados e o contador
+ * zerado. `contas` é opcional (ausente ⇒ a coleção não é tocada).
  */
-export async function aplicarTrocaSenha({ saltBytes, controle, mfas }) {
-  await area().set({
+export async function aplicarTrocaSenha({ saltBytes, controle, mfas, contas }) {
+  const escrita = {
     [CHAVE_SALT]: cripto.bytesParaBase64(saltBytes),
     [CHAVE_CONTROLE]: controle,
     [CHAVE_MFAS]: mfas,
     [CHAVE_TENTATIVAS]: 0,
-  });
+  };
+  if (Array.isArray(contas)) escrita[CHAVE_CONTAS] = contas;
+  await area().set(escrita);
 }
 
 /**
@@ -367,4 +382,282 @@ export async function removerMfa(id) {
   const removidos = todos.length - filtrados.length;
   if (removidos > 0) await gravarTodos(filtrados);
   return removidos;
+}
+
+/* --------------------- contas do site: e-mail + senha (task 30) --------------------- */
+//
+// Coleção separada dos MFAs (`credItems`), ligada ao site pelo campo `dominio`
+// (comparação exata, igual à dos MFAs). E-mail e senha são SEMPRE cifrados aqui
+// antes de persistir, cada um com seu próprio IV — nunca reusar IV com a mesma
+// chave. A única exceção é `salvarContaSemCripto`/`atualizarContaSemCripto`
+// (localhost, task 26), cujo domínio é validado pelo chamador (background).
+//
+// Invariante: cada domínio tem EXATAMENTE uma conta principal (a que recebe o
+// autopreenchimento). Ela é mantida por `normalizarPrincipais` em toda escrita.
+
+async function lerContas() {
+  const dados = await area().get(CHAVE_CONTAS);
+  return Array.isArray(dados[CHAVE_CONTAS]) ? dados[CHAVE_CONTAS] : [];
+}
+
+async function gravarContas(lista) {
+  await area().set({ [CHAVE_CONTAS]: lista });
+}
+
+function normalizarRotulo(valor) {
+  if (typeof valor !== 'string') return null;
+  const limpo = valor.trim();
+  return limpo === '' ? null : limpo;
+}
+
+/** Campos obrigatórios de uma conta (domínio é a chave de vínculo com o site). */
+function exigirCamposConta({ dominio, email, senha }) {
+  if (normalizarCampoDominio(dominio) === null) {
+    throw new Error('Site (domínio) da conta é obrigatório.');
+  }
+  if (typeof email !== 'string' || email.trim() === '') {
+    throw new Error('E-mail (ou usuário) é obrigatório.');
+  }
+  if (typeof senha !== 'string' || senha === '') {
+    throw new Error('Senha da conta é obrigatória.');
+  }
+}
+
+/**
+ * Devolve uma NOVA lista em que o domínio informado tem exatamente uma conta
+ * principal. `preferidaId` (quando existe no domínio) vence; senão mantém-se a
+ * principal atual mais antiga; senão promove-se a conta mais antiga do domínio.
+ */
+function normalizarPrincipais(lista, dominio, preferidaId = null) {
+  const doDominio = lista.filter((c) => c.dominio === dominio);
+  if (doDominio.length === 0) return lista;
+  const porIdade = [...doDominio].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const escolhida =
+    (preferidaId && doDominio.find((c) => c.id === preferidaId)) ||
+    porIdade.find((c) => c.principal === true) ||
+    porIdade[0];
+  return lista.map((c) =>
+    c.dominio === dominio ? { ...c, principal: c.id === escolhida.id } : c,
+  );
+}
+
+/** Todas as contas (com e-mail/senha ainda cifrados). */
+export async function listarContas() {
+  return lerContas();
+}
+
+/** Contas de um domínio (comparação exata de strings). */
+export async function listarContasPorDominio(dominio) {
+  const todas = await lerContas();
+  return todas.filter((c) => c.dominio === dominio);
+}
+
+/** Uma conta pelo id (ainda cifrada), ou null. */
+export async function obterConta(id) {
+  const todas = await lerContas();
+  return todas.find((c) => c.id === id) ?? null;
+}
+
+/**
+ * Quantas contas cada domínio tem — só contagem, sem decifrar nada. Alimenta o
+ * ícone indicativo nos cards e a seleção de domínios da exportação.
+ * @returns {Promise<Record<string, number>>}
+ */
+export async function contarContasPorDominio() {
+  const todas = await lerContas();
+  const mapa = {};
+  for (const conta of todas) {
+    if (typeof conta.dominio !== 'string') continue;
+    mapa[conta.dominio] = (mapa[conta.dominio] ?? 0) + 1;
+  }
+  return mapa;
+}
+
+/**
+ * Cria uma conta cifrando e-mail e senha (IVs distintos). O texto em claro
+ * nunca é persistido.
+ * @param {{dominio:string, rotulo?:string|null, email:string, senha:string, principal?:boolean}} dados
+ * @param {CryptoKey} chave chave de sessão (transitória, nunca persistida)
+ */
+export async function salvarConta({ dominio, rotulo, email, senha, principal = false }, chave) {
+  exigirCamposConta({ dominio, email, senha });
+  const cifradoEmail = await cripto.criptografar(email.trim(), chave);
+  const cifradoSenha = await cripto.criptografar(senha, chave);
+  const agora = Date.now();
+  const registro = {
+    id: crypto.randomUUID(),
+    dominio: normalizarCampoDominio(dominio),
+    rotulo: normalizarRotulo(rotulo),
+    emailCriptografado: cifradoEmail.ciphertext,
+    ivEmail: cifradoEmail.iv,
+    senhaCriptografada: cifradoSenha.ciphertext,
+    ivSenha: cifradoSenha.iv,
+    principal: Boolean(principal),
+    createdAt: agora,
+    updatedAt: agora,
+  };
+  const todas = await lerContas();
+  todas.push(registro);
+  const lista = normalizarPrincipais(todas, registro.dominio, principal ? registro.id : null);
+  await gravarContas(lista);
+  await garantirSchemaVersion();
+  return lista.find((c) => c.id === registro.id);
+}
+
+/**
+ * Cria uma conta de localhost SEM criptografia (mesma exceção da task 26). O
+ * chamador (background) é responsável por validar que o domínio é localhost.
+ */
+export async function salvarContaSemCripto({ dominio, rotulo, email, senha, principal = false }) {
+  exigirCamposConta({ dominio, email, senha });
+  const agora = Date.now();
+  const registro = {
+    id: crypto.randomUUID(),
+    dominio: normalizarCampoDominio(dominio),
+    rotulo: normalizarRotulo(rotulo),
+    emailEmClaro: email.trim(),
+    senhaEmClaro: senha,
+    semCriptografia: true,
+    principal: Boolean(principal),
+    createdAt: agora,
+    updatedAt: agora,
+  };
+  const todas = await lerContas();
+  todas.push(registro);
+  const lista = normalizarPrincipais(todas, registro.dominio, principal ? registro.id : null);
+  await gravarContas(lista);
+  await garantirSchemaVersion();
+  return lista.find((c) => c.id === registro.id);
+}
+
+/** Aplica campos comuns (domínio/rótulo/principal) e regrava mantendo a invariante. */
+async function gravarContaAtualizada(todas, indice, atualizado, principal) {
+  const dominioAntigo = todas[indice].dominio;
+  let lista = todas.map((c, i) => (i === indice ? atualizado : c));
+  if (dominioAntigo !== atualizado.dominio) lista = normalizarPrincipais(lista, dominioAntigo);
+  lista = normalizarPrincipais(
+    lista,
+    atualizado.dominio,
+    principal === true ? atualizado.id : null,
+  );
+  await gravarContas(lista);
+  return lista.find((c) => c.id === atualizado.id);
+}
+
+/**
+ * Atualiza uma conta cifrada. `email`/`senha` só são recifrados (novo IV) quando
+ * vierem preenchidos — em branco significa "manter o valor atual".
+ * @returns o registro atualizado, ou `null` se o id não existir.
+ */
+export async function atualizarConta(id, { dominio, rotulo, email, senha, principal }, chave) {
+  const todas = await lerContas();
+  const indice = todas.findIndex((c) => c.id === id);
+  if (indice === -1) return null;
+  const atual = todas[indice];
+
+  const novoDominio = normalizarCampoDominio(dominio ?? atual.dominio);
+  if (novoDominio === null) throw new Error('Site (domínio) da conta é obrigatório.');
+
+  const atualizado = {
+    ...atual,
+    dominio: novoDominio,
+    rotulo: normalizarRotulo(rotulo === undefined ? atual.rotulo : rotulo),
+    updatedAt: Date.now(),
+  };
+  if (typeof email === 'string' && email.trim() !== '') {
+    const cifrado = await cripto.criptografar(email.trim(), chave);
+    atualizado.emailCriptografado = cifrado.ciphertext;
+    atualizado.ivEmail = cifrado.iv;
+  }
+  if (typeof senha === 'string' && senha !== '') {
+    const cifrado = await cripto.criptografar(senha, chave);
+    atualizado.senhaCriptografada = cifrado.ciphertext;
+    atualizado.ivSenha = cifrado.iv;
+  }
+  return gravarContaAtualizada(todas, indice, atualizado, principal);
+}
+
+/** Atualiza uma conta de localhost sem criptografia, mantendo-a em claro. */
+export async function atualizarContaSemCripto(id, { dominio, rotulo, email, senha, principal }) {
+  const todas = await lerContas();
+  const indice = todas.findIndex((c) => c.id === id);
+  if (indice === -1) return null;
+  const atual = todas[indice];
+
+  const novoDominio = normalizarCampoDominio(dominio ?? atual.dominio);
+  if (novoDominio === null) throw new Error('Site (domínio) da conta é obrigatório.');
+
+  const atualizado = {
+    ...atual,
+    dominio: novoDominio,
+    rotulo: normalizarRotulo(rotulo === undefined ? atual.rotulo : rotulo),
+    semCriptografia: true,
+    updatedAt: Date.now(),
+  };
+  if (typeof email === 'string' && email.trim() !== '') atualizado.emailEmClaro = email.trim();
+  if (typeof senha === 'string' && senha !== '') atualizado.senhaEmClaro = senha;
+  return gravarContaAtualizada(todas, indice, atualizado, principal);
+}
+
+/**
+ * Converte uma conta de localhost-sem-cripto para criptografada — usada quando
+ * o domínio editado deixa de ser localhost. Conversão só nesse sentido; voltar a
+ * sem-cripto exige excluir e recadastrar (decisão tomada na criação, task 26).
+ */
+export async function converterContaParaCriptografada(
+  id,
+  { dominio, rotulo, email, senha, principal },
+  chave,
+) {
+  const todas = await lerContas();
+  const indice = todas.findIndex((c) => c.id === id);
+  if (indice === -1) return null;
+  const atual = todas[indice];
+
+  const emailFinal = typeof email === 'string' && email.trim() !== '' ? email.trim() : atual.emailEmClaro;
+  const senhaFinal = typeof senha === 'string' && senha !== '' ? senha : atual.senhaEmClaro;
+  exigirCamposConta({ dominio: dominio ?? atual.dominio, email: emailFinal, senha: senhaFinal });
+
+  const cifradoEmail = await cripto.criptografar(emailFinal, chave);
+  const cifradoSenha = await cripto.criptografar(senhaFinal, chave);
+  const atualizado = {
+    id: atual.id,
+    dominio: normalizarCampoDominio(dominio ?? atual.dominio),
+    rotulo: normalizarRotulo(rotulo === undefined ? atual.rotulo : rotulo),
+    emailCriptografado: cifradoEmail.ciphertext,
+    ivEmail: cifradoEmail.iv,
+    senhaCriptografada: cifradoSenha.ciphertext,
+    ivSenha: cifradoSenha.iv,
+    principal: atual.principal === true,
+    createdAt: atual.createdAt,
+    updatedAt: Date.now(),
+  };
+  return gravarContaAtualizada(todas, indice, atualizado, principal);
+}
+
+/** Marca uma conta como principal do seu domínio (desmarcando as demais). */
+export async function definirContaPrincipal(id) {
+  const todas = await lerContas();
+  const conta = todas.find((c) => c.id === id);
+  if (!conta) return null;
+  const lista = normalizarPrincipais(todas, conta.dominio, id);
+  await gravarContas(lista);
+  return lista.find((c) => c.id === id);
+}
+
+/**
+ * Remove uma conta por id. Se era a principal do domínio, a mais antiga
+ * remanescente é promovida. Remover um id inexistente é no-op.
+ * @returns {Promise<number>} quantos registros foram removidos (0 ou 1).
+ */
+export async function removerConta(id) {
+  const todas = await lerContas();
+  const alvo = todas.find((c) => c.id === id);
+  if (!alvo) return 0;
+  const restantes = normalizarPrincipais(
+    todas.filter((c) => c.id !== id),
+    alvo.dominio,
+  );
+  await gravarContas(restantes);
+  return 1;
 }

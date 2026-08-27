@@ -129,8 +129,8 @@ test('removerMfa remove por id; id inexistente é no-op', async () => {
   assert.equal((await storage.listarMfas()).length, 0);
 });
 
-test('salvarMfa grava schemaVersion = 1', async () => {
+test('salvarMfa grava a schemaVersion atual', async () => {
   assert.equal(await storage.obterSchemaVersion(), null);
   await storage.salvarMfa({ nome: 'X', dominio: null, secretEmClaro: SEGREDO }, CHAVE);
-  assert.equal(await storage.obterSchemaVersion(), 1);
+  assert.equal(await storage.obterSchemaVersion(), storage.SCHEMA_ATUAL);
 });
