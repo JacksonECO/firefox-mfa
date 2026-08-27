@@ -40,15 +40,25 @@ export function pararTicker() {
  * Renderiza a lista de cards dentro de `container`.
  * @param {HTMLElement} container
  * @param {Array} itens metadados dos MFAs (id, nome, dominio)
- * @param {{obterCodigo: (id:string)=>Promise<any>, aoEditar: (id:string)=>void}} cbs
+ * @param {{obterCodigo: (id:string)=>Promise<any>, aoEditar: (id:string)=>void,
+ *         contasPorDominio?: Record<string, number>,
+ *         aoPreencherLogin?: (dominio:string)=>Promise<boolean>}} cbs
+ *   `contasPorDominio` só informa a CONTAGEM de contas por domínio — o card
+ *   nunca vê e-mail nem senha; ele apenas mostra o ícone e pede o preenchimento.
  * @returns {Promise<Array>} os controladores criados (cada um expõe `.codigo`).
  */
-export async function renderizarLista(container, itens, { obterCodigo, aoEditar }) {
+export async function renderizarLista(
+  container,
+  itens,
+  { obterCodigo, aoEditar, contasPorDominio = {}, aoPreencherLogin = null },
+) {
   pararTicker();
   container.replaceChildren();
 
   const template = document.getElementById('tpl-card');
-  controladores = itens.map((mfa) => criarCard(template, mfa, { obterCodigo, aoEditar }));
+  controladores = itens.map((mfa) =>
+    criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, aoPreencherLogin }),
+  );
   for (const c of controladores) container.append(c.el);
 
   await Promise.all(controladores.map((c) => c.atualizarCodigo()));
@@ -70,7 +80,7 @@ function tique() {
   }
 }
 
-function criarCard(template, mfa, { obterCodigo, aoEditar }) {
+function criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, aoPreencherLogin }) {
   const fragmento = template.content.cloneNode(true);
   const el = fragmento.querySelector('.card');
 
@@ -125,6 +135,16 @@ function criarCard(template, mfa, { obterCodigo, aoEditar }) {
       sinalizar(feedback, 'Falha ao copiar', 'card__feedback--erro');
     }
   });
+
+  // Ícone indicativo: este site tem e-mail e senha salvos. Clicar preenche na
+  // página (a senha nunca passa por aqui — quem injeta é o background).
+  const botaoContas = el.querySelector('.card__contas');
+  if (mfa.dominio && (contasPorDominio?.[mfa.dominio] ?? 0) > 0) {
+    botaoContas.hidden = false;
+    if (typeof aoPreencherLogin === 'function') {
+      botaoContas.addEventListener('click', () => aoPreencherLogin(mfa.dominio));
+    }
+  }
 
   const botaoEditar = el.querySelector('.card__editar');
   if (typeof aoEditar === 'function') {

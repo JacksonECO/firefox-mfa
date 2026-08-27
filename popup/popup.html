@@ -95,7 +95,12 @@
           <p class="vazio__msg" id="vazio-msg">Nenhum MFA cadastrado ainda.</p>
         </div>
 
-        <button class="btn" id="btn-adicionar" type="button">+ Adicionar novo</button>
+        <div class="acoes-adicionar">
+          <button class="btn" id="btn-adicionar" type="button">+ Novo MFA</button>
+          <button class="btn btn--secundario" id="btn-adicionar-conta" type="button">
+            + E-mail e senha
+          </button>
+        </div>
 
         <div class="rodape">
           <button class="btn-link" id="btn-config" type="button">Configurações</button>
@@ -112,6 +117,9 @@
         </p>
         <p class="principal__aviso" id="localhost-aviso" role="status"></p>
         <ul class="lista" id="localhost-lista"></ul>
+        <button class="btn btn--secundario" id="localhost-login" type="button" hidden>
+          Preencher e-mail e senha
+        </button>
         <button class="btn" id="localhost-entrar" type="button">Entrar com a senha mestra</button>
       </section>
 
@@ -244,6 +252,41 @@
           <button class="btn" type="submit">Salvar autopreenchimento</button>
           <p class="form__status" id="af-status" role="status"></p>
         </form>
+
+        <form id="form-autofill-login" class="form config__bloco" novalidate>
+          <h2 class="config__titulo">Autopreenchimento de login</h2>
+          <p class="config__ajuda">
+            Ao abrir a extensão, preenche o e-mail/usuário e a senha da <strong>conta
+            principal</strong> do site. A senha vai do processo de fundo direto para a página —
+            nunca passa por esta janela. Os seletores padrão cobrem a maioria dos formulários;
+            quando não casarem, defina um seletor só para aquele domínio.
+          </p>
+          <label class="field field--inline">
+            <input id="al-habilitado" type="checkbox" />
+            <span class="field__label">Habilitar autopreenchimento de login</span>
+          </label>
+          <label class="field field--inline">
+            <input id="al-submeter" type="checkbox" />
+            <span class="field__label">Enviar o formulário com Enter depois de preencher</span>
+          </label>
+          <p class="config__ajuda config__ajuda--aviso">
+            ⚠️ O envio automático pode disparar a ação errada em páginas que usam Enter para
+            outra coisa. Desligado por padrão.
+          </p>
+          <label class="field">
+            <span class="field__label">Seletor CSS do campo de e-mail/usuário</span>
+            <input class="field__input" id="al-seletor-email" type="text" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span class="field__label">Seletor CSS do campo de senha</span>
+            <input class="field__input" id="al-seletor-senha" type="text" spellcheck="false" />
+          </label>
+          <span class="field__label">Seletores por domínio (opcional)</span>
+          <div id="al-dominios"></div>
+          <button class="btn-link" id="al-add-dominio" type="button">+ Adicionar domínio</button>
+          <button class="btn" type="submit">Salvar autopreenchimento de login</button>
+          <p class="form__status" id="al-status" role="status"></p>
+        </form>
       </section>
 
       <!-- Formulário compartilhado: criar (task 04) e editar (task 09) -->
@@ -253,58 +296,233 @@
           <button class="btn-link" id="form-voltar" type="button">Voltar</button>
         </div>
         <form id="form-mfa" class="form" novalidate>
-          <label class="field">
-            <span class="field__label">Nome <span class="field__req">*</span></span>
-            <input class="field__input" id="mfa-nome" type="text" maxlength="100" />
-          </label>
-          <p class="field__erro" id="mfa-nome-erro" role="alert"></p>
+          <div class="grupo">
+            <p class="grupo__titulo">
+              <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 7h16M4 12h16M4 17h10" />
+              </svg>
+              <span>Identificação</span>
+            </p>
+            <label class="field">
+              <span class="field__label">Nome <span class="field__req">*</span></span>
+              <input class="field__input" id="mfa-nome" type="text" maxlength="100" />
+            </label>
+            <p class="field__erro" id="mfa-nome-erro" role="alert"></p>
 
-          <label class="field">
-            <span class="field__label">Site (domínio)</span>
-            <input
-              class="field__input"
-              id="mfa-dominio"
-              type="text"
-              maxlength="255"
-              placeholder="ex: github.com"
-            />
-          </label>
-
-          <label class="field">
-            <span class="field__label">Chave (segredo) <span class="field__req">*</span></span>
-            <span class="field__secret">
+            <label class="field">
+              <span class="field__label">Site (domínio)</span>
               <input
                 class="field__input"
-                id="mfa-secret"
-                type="password"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
+                id="mfa-dominio"
+                type="text"
+                maxlength="255"
+                placeholder="ex: github.com"
               />
-              <button
-                class="btn-link"
-                id="mfa-secret-toggle"
-                type="button"
-                aria-label="Mostrar ou ocultar a chave"
-              >
-                Mostrar
-              </button>
-            </span>
-          </label>
-          <p class="field__erro" id="mfa-secret-erro" role="alert"></p>
+            </label>
+          </div>
 
-          <label class="field field--inline" id="mfa-sem-cripto-campo" hidden>
-            <input id="mfa-sem-cripto" type="checkbox" />
-            <span class="field__label">
-              Cadastrar sem criptografia (só localhost) — visível sem a senha mestra
-            </span>
-          </label>
+          <div class="grupo">
+            <p class="grupo__titulo">
+              <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="7.5" cy="15" r="3.5" />
+                <path d="M10 12.5 19 3.5M16 6.5l2 2M19 3.5l2 2" />
+              </svg>
+              <span>Código de verificação (TOTP)</span>
+            </p>
+            <label class="field">
+              <span class="field__label">Chave (segredo) <span class="field__req">*</span></span>
+              <span class="field__secret">
+                <input
+                  class="field__input"
+                  id="mfa-secret"
+                  type="password"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                />
+                <button
+                  class="btn-link"
+                  id="mfa-secret-toggle"
+                  type="button"
+                  aria-label="Mostrar ou ocultar a chave"
+                >
+                  Mostrar
+                </button>
+              </span>
+            </label>
+            <p class="field__erro" id="mfa-secret-erro" role="alert"></p>
+
+            <label class="field field--inline" id="mfa-sem-cripto-campo" hidden>
+              <input id="mfa-sem-cripto" type="checkbox" />
+              <span class="field__label">
+                Cadastrar sem criptografia (só localhost) — visível sem a senha mestra
+              </span>
+            </label>
+          </div>
+
+          <!-- Contas do site: entidade própria (por domínio), editada em tela dedicada -->
+          <div class="grupo">
+            <p class="grupo__titulo">
+              <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+              </svg>
+              <span>E-mail e senha deste site</span>
+            </p>
+            <p class="grupo__ajuda" id="mfa-contas-resumo"></p>
+            <button class="btn btn--secundario" id="mfa-contas-abrir" type="button">
+              + Salvar e-mail e senha
+            </button>
+          </div>
 
           <button class="btn" type="submit">Salvar MFA</button>
           <button class="btn btn--perigo" id="btn-excluir" type="button" hidden>
             Excluir MFA
           </button>
           <p class="form__status" id="mfa-status" role="status"></p>
+        </form>
+      </section>
+
+      <!-- Contas do site: lista por domínio (task 30) -->
+      <section id="view-contas" class="view" hidden>
+        <div class="principal__topo">
+          <p class="view__desc" id="contas-titulo">Contas do site</p>
+          <button class="btn-link" id="contas-voltar" type="button">Voltar</button>
+        </div>
+        <p class="config__ajuda">
+          A conta <strong>principal</strong> é a que a extensão preenche automaticamente na
+          página. A senha nunca é exibida aqui — só no formulário de edição.
+        </p>
+
+        <ul class="lista" id="lista-contas"></ul>
+
+        <div class="vazio" id="contas-vazio" hidden>
+          <p class="vazio__msg">Nenhuma conta salva para este site ainda.</p>
+        </div>
+
+        <p class="principal__aviso" id="contas-aviso" role="status"></p>
+        <button class="btn" id="contas-adicionar" type="button">+ Adicionar conta</button>
+      </section>
+
+      <!-- Formulário de conta: criar (novo) e editar (task 30) -->
+      <section id="view-conta-form" class="view" hidden>
+        <div class="principal__topo">
+          <p class="view__desc" id="conta-form-titulo">Nova conta</p>
+          <button class="btn-link" id="conta-form-voltar" type="button">Voltar</button>
+        </div>
+        <!-- autocomplete="off": o navegador não deve sugerir nem salvar estas credenciais;
+             quem as guarda é o cofre da extensão, criptografadas. -->
+        <form id="form-conta" class="form" novalidate autocomplete="off">
+          <div class="grupo">
+            <p class="grupo__titulo">
+              <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 7h16M4 12h16M4 17h10" />
+              </svg>
+              <span>Site</span>
+            </p>
+            <label class="field">
+              <span class="field__label">Site (domínio) <span class="field__req">*</span></span>
+              <input
+                class="field__input"
+                id="conta-dominio"
+                type="text"
+                maxlength="255"
+                spellcheck="false"
+                placeholder="ex: github.com"
+              />
+            </label>
+            <p class="field__erro" id="conta-dominio-erro" role="alert"></p>
+
+            <label class="field">
+              <span class="field__label">Rótulo (opcional)</span>
+              <input
+                class="field__input"
+                id="conta-rotulo"
+                type="text"
+                maxlength="60"
+                placeholder="ex: Pessoal, Trabalho"
+              />
+            </label>
+            <p class="field__erro" id="conta-rotulo-erro" role="alert"></p>
+          </div>
+
+          <div class="grupo">
+            <p class="grupo__titulo">
+              <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="5" width="18" height="14" rx="2.5" />
+                <path d="m3.6 7 8.4 5.6L20.4 7" />
+              </svg>
+              <span>E-mail ou usuário</span>
+            </p>
+            <label class="field">
+              <span class="field__label">E-mail ou usuário <span class="field__req">*</span></span>
+              <input
+                class="field__input"
+                id="conta-email"
+                type="text"
+                maxlength="255"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+            </label>
+            <p class="field__erro" id="conta-email-erro" role="alert"></p>
+          </div>
+
+          <div class="grupo">
+            <p class="grupo__titulo">
+              <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="4.5" y="10" width="15" height="10" rx="2.5" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              </svg>
+              <span>Senha</span>
+            </p>
+            <label class="field">
+              <span class="field__label">Senha <span class="field__req">*</span></span>
+              <span class="field__secret">
+                <input
+                  class="field__input"
+                  id="conta-senha"
+                  type="password"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                />
+                <button
+                  class="btn-link"
+                  id="conta-senha-toggle"
+                  type="button"
+                  aria-label="Mostrar ou ocultar a senha"
+                >
+                  Mostrar
+                </button>
+              </span>
+            </label>
+            <p class="field__erro" id="conta-senha-erro" role="alert"></p>
+            <p class="grupo__ajuda" id="conta-senha-ajuda" hidden>
+              Deixe em branco para manter a senha atual.
+            </p>
+          </div>
+
+          <label class="field field--inline">
+            <input id="conta-principal" type="checkbox" />
+            <span class="field__label">
+              Conta principal deste site (é a que o autopreenchimento usa)
+            </span>
+          </label>
+
+          <label class="field field--inline" id="conta-sem-cripto-campo" hidden>
+            <input id="conta-sem-cripto" type="checkbox" />
+            <span class="field__label">
+              Cadastrar sem criptografia (só localhost) — visível sem a senha mestra
+            </span>
+          </label>
+
+          <button class="btn" type="submit">Salvar conta</button>
+          <button class="btn btn--perigo" id="conta-excluir" type="button" hidden>
+            Excluir conta
+          </button>
+          <p class="form__status" id="conta-status" role="status"></p>
         </form>
       </section>
 
@@ -342,7 +560,36 @@
           </svg>
           <span class="card__segundos"></span>
         </div>
+        <button
+          class="card__contas"
+          type="button"
+          hidden
+          title="E-mail e senha salvos para este site — clique para preencher na página"
+          aria-label="Preencher e-mail e senha deste site"
+        >
+          <svg class="icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="8" r="3.5" />
+            <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+          </svg>
+        </button>
         <button class="card__editar" type="button" aria-label="Editar MFA">✎</button>
+      </li>
+    </template>
+
+    <!-- Template da linha de conta (clonado por JS; rótulo/e-mail via textContent) -->
+    <template id="tpl-conta">
+      <li class="conta">
+        <label class="switch" title="Definir como conta principal">
+          <input class="switch__input" type="radio" name="conta-principal-radio" />
+          <span class="switch__trilho" aria-hidden="true"></span>
+          <span class="switch__texto">Principal</span>
+        </label>
+        <div class="conta__info">
+          <span class="conta__email"></span>
+          <span class="conta__rotulo"></span>
+        </div>
+        <button class="conta__mostrar btn-link" type="button">Mostrar</button>
+        <button class="conta__editar" type="button" aria-label="Editar conta">✎</button>
       </li>
     </template>
 

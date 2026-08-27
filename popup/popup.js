@@ -6,8 +6,9 @@
 // (textContent, nunca innerHTML). A única exceção é o REVEAL_SECRET pontual do
 // fluxo de edição, descartado do campo ao sair.
 
-import { extrairDominioDaAba, ehLocalhost } from '../src/dominio.js';
+import { extrairDominioDaAba, ehLocalhost, normalizarDominio } from '../src/dominio.js';
 import { validarCadastro } from '../src/cadastro.js';
+import { validarConta, mascararEmail } from '../src/conta.js';
 import {
   validarCadastroSenha,
   decidirTela,
@@ -25,6 +26,8 @@ const VIEWS = [
   'view-desbloquear',
   'view-principal',
   'view-formulario',
+  'view-contas',
+  'view-conta-form',
   'view-config',
   'view-localhost',
 ];
@@ -44,12 +47,23 @@ let dominioAtual = null;
 let mfasCache = [];
 let edicaoId = null; // null = modo criar; id = modo editar
 
+// Contas do site (task 30). `contasPorDominio` é só a CONTAGEM por domínio —
+// o que basta para o ícone dos cards, sem trazer e-mail nem senha para cá.
+let contasPorDominio = {};
+let contasCache = [];
+let dominioContas = null; // domínio cujas contas estão sendo listadas/editadas
+let contaEdicaoId = null; // null = criar conta; id = editar
+let voltarDeContas = 'principal'; // para onde a LISTA de contas volta: principal|formulario
+let voltarDoConta = 'contas'; // para onde o FORMULÁRIO de conta volta: contas|principal
+let alvoExclusao = null; // { tipo: 'mfa' | 'conta', id } — diálogo compartilhado
+let configAutofillCache = null; // config completa, p/ salvar um bloco sem perder o outro
+
 /* ------------------------------ navegação ------------------------------ */
 
 function mostrarVista(nome) {
   // O ticker é usado pela tela principal e pela tela localhost (ambas têm cards).
   if (nome !== 'principal' && nome !== 'localhost') pararTicker();
-  $('dialog-excluir').hidden = true; // o diálogo é transitório: nunca persiste entre telas
+  fecharDialogoExclusao(); // o diálogo é transitório: nunca persiste entre telas
   for (const id of VIEWS) $(id).hidden = id !== `view-${nome}`;
   // Foca o campo inicial da tela (ex.: senha mestra), se a tela marcar um. Como as
   // telas começam ocultas, o atributo HTML `autofocus` não dispara — focamos aqui.
@@ -103,11 +117,17 @@ async function rotearVistaInicial() {
     return;
   }
 
-  // Fluxo localhost sem senha mestra (task 26): só se houver MFAs locais sem cripto.
+  // Fluxo localhost sem senha mestra (task 26): MFAs e/ou contas locais sem cripto.
   if (ehLocalhost(dominioAtual)) {
     const locais = await enviar({ type: 'LIST_LOCALHOST', dominio: dominioAtual }).catch(() => null);
-    if (locais?.ok && locais.mfas.length > 0) {
-      await abrirLocalhost(dominioAtual, locais.mfas);
+    const contas = await enviar({
+      type: 'LIST_CONTAS_LOCALHOST',
+      dominio: dominioAtual,
+    }).catch(() => null);
+    const mfasLocais = locais?.ok ? locais.mfas : [];
+    const contasLocais = contas?.ok ? contas.contas : [];
+    if (mfasLocais.length > 0 || contasLocais.length > 0) {
+      await abrirLocalhost(dominioAtual, mfasLocais, contasLocais);
       return;
     }
   }
@@ -115,32 +135,46 @@ async function rotearVistaInicial() {
   mostrarVista(decidirTela({ temSenha, sessaoAtiva })); // criar-senha ou desbloquear
 }
 
-async function abrirLocalhost(dominio, mfas) {
+async function abrirLocalhost(dominio, mfas, contasLocais = []) {
   mostrarVista('localhost');
   limpar($('localhost-aviso'));
-  dizer($('localhost-contexto'), `MFAs locais de ${dominio} (sem criptografia)`);
+  dizer($('localhost-contexto'), `Acesso local de ${dominio} (sem criptografia)`);
   const controladores = await renderizarLista($('localhost-lista'), mfas, {
     obterCodigo: (id) => enviar({ type: 'GET_CODE_LOCALHOST', id }),
     aoEditar: null, // sem edição sem login
   });
 
-  // Ações "ao abrir" (autocópia/autopreenchimento) também valem aqui (task 28):
-  // só com exatamente 1 MFA local, igual à tela principal. A config vem por uma
-  // mensagem que não exige sessão (GET_CONFIG_PUBLICO) — só dados não sensíveis.
-  if (mfas.length !== 1) return;
+  // Contas locais sem criptografia (task 30): aqui o preenchimento fica num
+  // botão próprio, e não no ícone do card — a lista pode nem ter MFA nenhum.
+  const temConta = contasLocais.length > 0;
+  $('localhost-login').hidden = !temConta;
+  if (temConta) {
+    dizer(
+      $('localhost-login'),
+      contasLocais.length === 1
+        ? 'Preencher e-mail e senha'
+        : `Preencher e-mail e senha (principal de ${contasLocais.length})`,
+    );
+  }
+
+  // Ações "ao abrir" (autocópia/autopreenchimento) também valem aqui (task 28).
+  // A config vem por uma mensagem que não exige sessão (GET_CONFIG_PUBLICO) —
+  // só dados não sensíveis. Com nada ligado (padrão da task 29), nada acontece.
   let config = {};
   try {
     config = (await enviar({ type: 'GET_CONFIG_PUBLICO' })) ?? {};
   } catch {
     /* ignora; usa padrões */
   }
-  // Nada ligado (padrão da task 29): só a lista aparece (task 28, critério 4) —
-  // evita tocar no código e na aba à toa.
-  if (config.autocopiar !== true && !config.autofill?.habilitado) return;
-  // Reaproveita o código já buscado pela lista — sem GET_CODE_LOCALHOST extra.
-  const codigo = controladores[0]?.codigo;
-  if (!codigo) return;
-  await aplicarCodigoAoAbrir(codigo, config, $('localhost-aviso'));
+  // Código: só com exatamente 1 MFA local, igual à tela principal. Reaproveita
+  // o valor já buscado pela lista — sem GET_CODE_LOCALHOST extra.
+  const codigo = mfas.length === 1 ? (controladores[0]?.codigo ?? null) : null;
+  await aplicarAcoesAoAbrir({
+    codigo,
+    config,
+    elAviso: $('localhost-aviso'),
+    login: temConta ? { tipo: 'AUTOFILL_LOGIN_LOCALHOST', dominio } : null,
+  });
 }
 
 function ligarEventos() {
@@ -158,9 +192,16 @@ function ligarEventos() {
   );
 
   $('btn-adicionar').addEventListener('click', () => abrirFormulario(null));
+  $('btn-adicionar-conta').addEventListener('click', aoClicarContasDoSite);
+  $('localhost-login').addEventListener('click', () =>
+    preencherLoginManual('AUTOFILL_LOGIN_LOCALHOST', dominioAtual, $('localhost-aviso')),
+  );
   $('btn-ver-todos').addEventListener('click', alternarVerTodos);
   $('localhost-entrar').addEventListener('click', () => mostrarVista('desbloquear'));
-  $('mfa-dominio').addEventListener('input', atualizarOpcaoSemCripto);
+  $('mfa-dominio').addEventListener('input', () => {
+    atualizarOpcaoSemCripto();
+    atualizarBlocoContas();
+  });
 
   // Backup abre uma aba dedicada: o seletor de arquivos fecharia o popup (task 20).
   $('btn-backup').addEventListener('click', abrirBackup);
@@ -174,6 +215,25 @@ function ligarEventos() {
   $('form-autofill').addEventListener('submit', aoSalvarAutofill);
   $('af-add-dominio').addEventListener('click', () => adicionarLinhaDominio('', ''));
 
+  $('mfa-contas-abrir').addEventListener('click', abrirContasDoFormulario);
+  $('contas-voltar').addEventListener('click', voltarDaListaDeContas);
+  $('contas-adicionar').addEventListener('click', () =>
+    abrirFormularioConta(null, dominioContas ?? dominioAtual ?? '', 'contas'),
+  );
+  $('form-conta').addEventListener('submit', aoSalvarConta);
+  $('form-conta').addEventListener('input', registrarAtividadeDigitando);
+  $('conta-form-voltar').addEventListener('click', voltarDoFormularioDeConta);
+  $('conta-senha-toggle').addEventListener('click', () =>
+    alternarVisibilidade('conta-senha', 'conta-senha-toggle'),
+  );
+  $('conta-dominio').addEventListener('input', atualizarOpcaoSemCriptoConta);
+  $('conta-excluir').addEventListener('click', () =>
+    abrirDialogoExclusao({ tipo: 'conta', id: contaEdicaoId }),
+  );
+
+  $('form-autofill-login').addEventListener('submit', aoSalvarAutofillLogin);
+  $('al-add-dominio').addEventListener('click', () => adicionarLinhaDominioLogin('', '', ''));
+
   $('form-mfa').addEventListener('submit', aoSalvarFormulario);
   // Digitar no cadastro (inclui o campo do segredo) também conta como atividade:
   // reforça o keep-alive da porta avisando o background a cada trecho digitado.
@@ -182,7 +242,9 @@ function ligarEventos() {
   $('mfa-secret-toggle').addEventListener('click', () =>
     alternarVisibilidade('mfa-secret', 'mfa-secret-toggle'),
   );
-  $('btn-excluir').addEventListener('click', abrirDialogoExclusao);
+  $('btn-excluir').addEventListener('click', () =>
+    abrirDialogoExclusao({ tipo: 'mfa', id: edicaoId }),
+  );
   $('dialog-cancelar').addEventListener('click', fecharDialogoExclusao);
   $('dialog-confirmar').addEventListener('click', confirmarExclusao);
 }
@@ -317,34 +379,47 @@ async function abrirPrincipal({ autoCopiar = false } = {}) {
     return;
   }
   mfasCache = resp.mfas;
+  await atualizarResumoContas();
   const decisao = renderizarPrincipal();
   if (autoCopiar) await executarAcoesAoAbrir(decisao);
 }
 
-// Ações automáticas "ao abrir": autocópia (task 15) + autopreenchimento (task 18) +
-// fechar-ao-preencher. É o ponto ÚNICO dessas ações — chamado tanto ao abrir já
-// desbloqueado (sessão ativa) quanto logo após desbloquear com a senha mestra, ambos
-// via abrirPrincipal({ autoCopiar: true }). Assim, qualquer regra de abertura nova
-// adicionada aqui passa a valer para os dois fluxos. Só age com 1 MFA do domínio.
+// Ações automáticas "ao abrir": autocópia (task 15) + autopreenchimento do código
+// (task 18) + autopreenchimento do login (task 30) + fechar-ao-preencher. É o ponto
+// ÚNICO dessas ações — chamado tanto ao abrir já desbloqueado (sessão ativa) quanto
+// logo após desbloquear com a senha mestra, ambos via abrirPrincipal({ autoCopiar:
+// true }). Assim, qualquer regra de abertura nova passa a valer para os dois fluxos.
+// O código só age com 1 MFA do domínio; o login, quando o domínio tem conta salva.
 async function executarAcoesAoAbrir(decisao) {
-  if (decisao.modo !== 'dominio' || decisao.itens.length !== 1) return;
+  const temConta = (contasPorDominio[dominioAtual] ?? 0) > 0;
+  const mfaUnico = decisao.modo === 'dominio' && decisao.itens.length === 1;
+  if (!temConta && !mfaUnico) return;
+
   let config = {};
   try {
     config = (await enviar({ type: 'GET_CONFIG' })) ?? {};
   } catch {
     /* ignora; usa padrões */
   }
-  const resp = await enviar({ type: 'GET_CODE', id: decisao.itens[0].id });
-  if (!resp?.ok) return;
-  await aplicarCodigoAoAbrir(resp.codigo, config, $('principal-aviso'));
+  let codigo = null;
+  if (mfaUnico) {
+    const resp = await enviar({ type: 'GET_CODE', id: decisao.itens[0].id });
+    if (resp?.ok) codigo = resp.codigo;
+  }
+  await aplicarAcoesAoAbrir({
+    codigo,
+    config,
+    elAviso: $('principal-aviso'),
+    login: temConta ? { tipo: 'AUTOFILL_LOGIN', dominio: dominioAtual } : null,
+  });
 }
 
-// Regra única de copiar/preencher/avisar/fechar para o código do MFA único ao
-// abrir. Compartilhada entre a tela principal (task 15) e o fluxo localhost sem
-// senha mestra (task 28), para as duas se comportarem igual.
-async function aplicarCodigoAoAbrir(codigo, config, elAviso) {
+// Regra única de copiar/preencher/avisar/fechar ao abrir. Compartilhada entre a
+// tela principal (tasks 15/18/30) e o fluxo localhost sem senha mestra (task 28),
+// para as duas se comportarem igual. Cada ação é opt-in e silenciosa se falhar.
+async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
   let copiou = false;
-  if (config.autocopiar === true) {
+  if (codigo && config.autocopiar === true) {
     // opt-in; padrão desligado (task 29)
     try {
       await copiarParaClipboard(codigo);
@@ -353,13 +428,53 @@ async function aplicarCodigoAoAbrir(codigo, config, elAviso) {
       /* clipboard indisponível: silencioso, o usuário ainda pode clicar */
     }
   }
-  const preencheu = await preencherNaAba(config.autofill, codigo);
-  if (preencheu && copiou) dizer(elAviso, 'Código copiado e preenchido na página ✓');
-  else if (preencheu) dizer(elAviso, 'Código preenchido na página ✓');
-  else if (copiou) dizer(elAviso, 'Código copiado automaticamente ✓');
+  const preencheuCodigo = codigo ? await preencherNaAba(config.autofill, codigo) : false;
+  const preencheuLogin =
+    login && config.autofill?.login?.habilitado
+      ? await pedirPreenchimentoDeLogin(login.tipo, login.dominio, false)
+      : false;
 
-  // Fecha o popup sozinho quando o autopreenchimento der certo (opção opt-in).
-  if (preencheu && config.autofill?.fecharAoPreencher) window.close();
+  const partes = [];
+  if (copiou && preencheuCodigo) partes.push('código copiado e preenchido');
+  else if (copiou) partes.push('código copiado');
+  else if (preencheuCodigo) partes.push('código preenchido');
+  if (preencheuLogin) partes.push('login preenchido');
+  if (partes.length > 0) {
+    const texto = partes.join(' · ');
+    dizer(elAviso, `${texto[0].toUpperCase()}${texto.slice(1)} ✓`);
+  }
+
+  // Fecha o popup sozinho quando o autopreenchimento do código der certo (opt-in).
+  if (preencheuCodigo && config.autofill?.fecharAoPreencher) window.close();
+}
+
+/**
+ * Pede ao background que injete e-mail e senha na aba ativa. O popup só informa
+ * a aba e o domínio: a senha em claro nunca passa por aqui.
+ * @returns {Promise<boolean>} true se algum campo foi preenchido.
+ */
+async function pedirPreenchimentoDeLogin(tipo, dominio, manual) {
+  if (!dominio) return false;
+  try {
+    const [aba] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!aba?.id) return false;
+    const resp = await enviar({ type: tipo, dominio, tabId: aba.id, manual });
+    return resp?.ok === true && resp.preencheu === true;
+  } catch {
+    return false; // página restrita / sem permissão: silencioso
+  }
+}
+
+/** Preenchimento pedido explicitamente (ícone do card ou botão do localhost). */
+async function preencherLoginManual(tipo, dominio, elAviso) {
+  limpar(elAviso);
+  const preencheu = await pedirPreenchimentoDeLogin(tipo, dominio, true);
+  dizer(
+    elAviso,
+    preencheu
+      ? 'Login preenchido na página ✓'
+      : 'Não encontrei os campos de login nesta página.',
+  );
 }
 
 // Função INJETADA na página (roda no contexto da aba, não no popup). Precisa ser
@@ -427,13 +542,21 @@ function renderizarPrincipal() {
   const contexto = $('principal-contexto');
   const botaoVerTodos = $('btn-ver-todos');
 
+  atualizarBotaoContasDoSite();
+
   // Estado vazio (nenhum MFA cadastrado)
   if (decisao.modo === 'vazio') {
     pararTicker();
     lista.replaceChildren();
     lista.hidden = true;
     vazio.hidden = false;
-    dizer($('vazio-msg'), 'Nenhum MFA cadastrado ainda. Adicione o primeiro abaixo.');
+    const contasAqui = contasPorDominio[dominioAtual] ?? 0;
+    dizer(
+      $('vazio-msg'),
+      contasAqui > 0
+        ? `Nenhum MFA cadastrado. Este site tem ${contasAqui} conta(s) salva(s) — veja em "E-mail e senha".`
+        : 'Nenhum MFA cadastrado ainda. Adicione o primeiro abaixo.',
+    );
     botaoVerTodos.hidden = true;
     dizer(contexto, '');
     return decisao;
@@ -461,8 +584,31 @@ function renderizarPrincipal() {
   renderizarLista(lista, decisao.itens, {
     obterCodigo: (id) => enviar({ type: 'GET_CODE', id }),
     aoEditar: (id) => abrirFormulario(id),
+    contasPorDominio,
+    aoPreencherLogin: (dominio) =>
+      preencherLoginManual('AUTOFILL_LOGIN', dominio, $('principal-aviso')),
   });
   return decisao;
+}
+
+/** Só a contagem de contas por domínio — nunca e-mail ou senha. */
+async function atualizarResumoContas() {
+  const resp = await enviar({ type: 'CONTAS_RESUMO' }).catch(() => null);
+  contasPorDominio = resp?.ok ? resp.porDominio : {};
+}
+
+/** O botão de contas da tela principal muda de acordo com o site atual. */
+function atualizarBotaoContasDoSite() {
+  const botao = $('btn-adicionar-conta');
+  const n = dominioAtual ? (contasPorDominio[dominioAtual] ?? 0) : 0;
+  dizer(botao, n > 0 ? `E-mail e senha (${n})` : '+ E-mail e senha');
+}
+
+/** Abre a lista de contas do site atual, ou o cadastro da primeira conta. */
+function aoClicarContasDoSite() {
+  const dominio = dominioAtual ?? '';
+  if (dominio && (contasPorDominio[dominio] ?? 0) > 0) return abrirContas(dominio, 'principal');
+  return abrirFormularioConta(null, dominio, 'principal');
 }
 
 function alternarVerTodos() {
@@ -500,6 +646,7 @@ async function abrirFormulario(id) {
     $('mfa-secret').value = '';
     $('mfa-dominio').value = (await obterDominioAtual()) ?? '';
     atualizarOpcaoSemCripto();
+    atualizarBlocoContas();
     return;
   }
 
@@ -513,6 +660,7 @@ async function abrirFormulario(id) {
   $('mfa-sem-cripto').checked = mfa?.semCriptografia === true;
   $('mfa-sem-cripto').disabled = true;
   atualizarOpcaoSemCripto();
+  atualizarBlocoContas();
   // Pré-preenche o segredo (exceção REVEAL_SECRET da ia/02; em claro p/ localhost).
   const resp = await enviar({ type: 'REVEAL_SECRET', id });
   $('mfa-secret').value = resp?.ok ? resp.secret : '';
@@ -564,20 +712,284 @@ async function aoSalvarFormulario(evento) {
   }
 }
 
+/* ---------------------- contas do site: e-mail e senha ---------------------- */
+//
+// A conta é uma entidade por DOMÍNIO (não por MFA): um site pode ter várias, e
+// exatamente uma é a principal — a que o autopreenchimento usa. A senha só chega
+// aqui no formulário de edição (REVEAL_CONTA) e é descartada do campo ao salvar.
+
+/** Resumo das contas dentro do formulário de MFA (leva à tela dedicada). */
+function atualizarBlocoContas() {
+  const dominio = normalizarDominio($('mfa-dominio').value);
+  const botao = $('mfa-contas-abrir');
+  if (dominio === null) {
+    dizer($('mfa-contas-resumo'), 'Informe o site acima para salvar e-mail e senha.');
+    dizer(botao, '+ Salvar e-mail e senha');
+    botao.disabled = true;
+    return;
+  }
+  const n = contasPorDominio[dominio] ?? 0;
+  botao.disabled = false;
+  if (n > 0) {
+    dizer($('mfa-contas-resumo'), `${n} conta(s) salva(s) para ${dominio}.`);
+    dizer(botao, `Ver contas de ${dominio}`);
+  } else {
+    dizer($('mfa-contas-resumo'), `Nenhuma conta salva para ${dominio}.`);
+    dizer(botao, '+ Salvar e-mail e senha');
+  }
+}
+
+function abrirContasDoFormulario() {
+  const dominio = normalizarDominio($('mfa-dominio').value);
+  if (dominio === null) return;
+  dominioContas = dominio;
+  voltarDeContas = 'formulario';
+  if ((contasPorDominio[dominio] ?? 0) > 0) return abrirContas(dominio, 'formulario');
+  return abrirFormularioConta(null, dominio, 'contas');
+}
+
+async function abrirContas(dominio, origem = 'principal') {
+  dominioContas = dominio;
+  voltarDeContas = origem;
+  mostrarVista('contas');
+  limpar($('contas-aviso'));
+  dizer($('contas-titulo'), `Contas de ${dominio}`);
+
+  const resp = await enviar({ type: 'LIST_CONTAS', dominio });
+  if (!resp?.ok) {
+    mostrarVista('desbloquear'); // sessão expirou enquanto o popup estava aberto
+    return;
+  }
+  contasCache = resp.contas;
+  renderizarContas();
+}
+
+function renderizarContas() {
+  const lista = $('lista-contas');
+  const vazio = $('contas-vazio');
+  lista.replaceChildren();
+  if (contasCache.length === 0) {
+    lista.hidden = true;
+    vazio.hidden = false;
+    return;
+  }
+  lista.hidden = false;
+  vazio.hidden = true;
+  const template = document.getElementById('tpl-conta');
+  for (const conta of contasCache) lista.append(criarLinhaConta(template, conta));
+}
+
+// `email` e `rotulo` são texto livre do usuário: sempre via textContent.
+function criarLinhaConta(template, conta) {
+  const fragmento = template.content.cloneNode(true);
+  const el = fragmento.querySelector('.conta');
+
+  const radio = el.querySelector('.switch__input');
+  radio.checked = conta.principal === true;
+  radio.addEventListener('change', () => definirContaPrincipal(conta.id));
+
+  const emailEl = el.querySelector('.conta__email');
+  const botaoMostrar = el.querySelector('.conta__mostrar');
+  let revelado = false;
+  const pintar = () => {
+    emailEl.textContent = revelado ? conta.email : mascararEmail(conta.email);
+    botaoMostrar.textContent = revelado ? 'Ocultar' : 'Mostrar';
+  };
+  pintar();
+  botaoMostrar.addEventListener('click', () => {
+    revelado = !revelado;
+    pintar();
+  });
+
+  const rotuloEl = el.querySelector('.conta__rotulo');
+  const legenda = [conta.rotulo, conta.semCriptografia ? 'sem criptografia' : null]
+    .filter(Boolean)
+    .join(' · ');
+  if (legenda === '') rotuloEl.hidden = true;
+  else rotuloEl.textContent = legenda;
+
+  el.querySelector('.conta__editar').addEventListener('click', () =>
+    abrirFormularioConta(conta.id, conta.dominio, 'contas'),
+  );
+  return el;
+}
+
+async function definirContaPrincipal(id) {
+  const resp = await enviar({ type: 'SET_CONTA_PRINCIPAL', id });
+  if (resp?.ok) {
+    contasCache = resp.contas;
+    renderizarContas();
+    dizer($('contas-aviso'), 'Conta principal atualizada ✓');
+  } else {
+    dizer($('contas-aviso'), 'Não foi possível atualizar a conta principal.');
+    renderizarContas(); // desfaz o rádio na tela
+  }
+}
+
+function voltarDaListaDeContas() {
+  if (voltarDeContas === 'formulario') return abrirFormulario(edicaoId);
+  return abrirPrincipal();
+}
+
+function voltarDoFormularioDeConta() {
+  if (voltarDoConta === 'contas' && dominioContas) {
+    return abrirContas(dominioContas, voltarDeContas);
+  }
+  return abrirPrincipal();
+}
+
+async function abrirFormularioConta(id, dominio, origem = 'contas') {
+  contaEdicaoId = id;
+  voltarDoConta = origem;
+  dominioContas = dominio || dominioContas;
+  for (const el of [
+    'conta-dominio-erro',
+    'conta-email-erro',
+    'conta-senha-erro',
+    'conta-rotulo-erro',
+    'conta-status',
+  ]) {
+    limpar($(el));
+  }
+  $('conta-senha').type = 'password';
+  $('conta-senha-toggle').textContent = 'Mostrar';
+  $('conta-sem-cripto').checked = false;
+  $('conta-sem-cripto').disabled = false;
+  mostrarVista('conta-form');
+
+  if (id === null) {
+    // modo criar
+    dizer($('conta-form-titulo'), 'Nova conta do site');
+    $('conta-excluir').hidden = true;
+    $('conta-senha-ajuda').hidden = true;
+    $('conta-dominio').value = dominio ?? '';
+    $('conta-email').value = '';
+    $('conta-senha').value = '';
+    $('conta-rotulo').value = '';
+    // A primeira conta de um site é sempre a principal.
+    $('conta-principal').checked = (contasPorDominio[dominio] ?? 0) === 0;
+    atualizarOpcaoSemCriptoConta();
+    return;
+  }
+
+  // modo editar
+  dizer($('conta-form-titulo'), 'Editar conta');
+  $('conta-excluir').hidden = false;
+  $('conta-senha-ajuda').hidden = false;
+  const conta = contasCache.find((c) => c.id === id);
+  $('conta-dominio').value = conta?.dominio ?? dominio ?? '';
+  $('conta-rotulo').value = conta?.rotulo ?? '';
+  $('conta-principal').checked = conta?.principal === true;
+  // O modo de criptografia é definido na criação e preservado: só informativo.
+  $('conta-sem-cripto').checked = conta?.semCriptografia === true;
+  $('conta-sem-cripto').disabled = true;
+  atualizarOpcaoSemCriptoConta();
+  // Exceção REVEAL_CONTA (ia/30): só o fluxo de edição recebe e-mail e senha
+  // em claro, para popular o formulário.
+  const resp = await enviar({ type: 'REVEAL_CONTA', id });
+  $('conta-email').value = resp?.ok ? resp.email : '';
+  $('conta-senha').value = resp?.ok ? resp.senha : '';
+}
+
+// Mostra a opção "sem criptografia" apenas quando o domínio é localhost (task 26).
+function atualizarOpcaoSemCriptoConta() {
+  const local = ehLocalhost($('conta-dominio').value);
+  $('conta-sem-cripto-campo').hidden = !local;
+  if (!local && contaEdicaoId === null) $('conta-sem-cripto').checked = false;
+}
+
+async function aoSalvarConta(evento) {
+  evento.preventDefault();
+  const status = $('conta-status');
+  for (const el of ['conta-dominio-erro', 'conta-email-erro', 'conta-senha-erro', 'conta-rotulo-erro']) {
+    limpar($(el));
+  }
+  limpar(status);
+
+  const dominio = $('conta-dominio').value;
+  const email = $('conta-email').value;
+  const senha = $('conta-senha').value;
+  const rotulo = $('conta-rotulo').value;
+  const criando = contaEdicaoId === null;
+
+  // Na edição, senha em branco significa "manter a atual".
+  const validacao = validarConta({ dominio, email, senha, rotulo }, { exigirSenha: criando });
+  if (!validacao.valido) {
+    mostrarErrosDaConta(validacao.erros);
+    return;
+  }
+
+  const semCriptografia = $('conta-sem-cripto').checked && ehLocalhost(dominio);
+  const resp = await enviar({
+    type: criando ? 'SAVE_CONTA' : 'UPDATE_CONTA',
+    id: contaEdicaoId,
+    dominio,
+    email,
+    senha,
+    rotulo,
+    principal: $('conta-principal').checked,
+    semCriptografia,
+  });
+  $('conta-senha').value = ''; // descarta a senha da UI
+
+  if (resp?.ok) {
+    await atualizarResumoContas();
+    await abrirContas(validacao.normalizado.dominio, voltarDeContas);
+  } else if (resp?.erros) {
+    mostrarErrosDaConta(resp.erros);
+  } else if (resp?.erro === 'SESSAO_BLOQUEADA') {
+    dizer(status, 'Sessão expirada. Feche e reabra para desbloquear.');
+  } else if (resp?.erro === 'SEM_CRIPTO_SO_LOCALHOST') {
+    dizer(status, 'A opção sem criptografia só vale para localhost.');
+  } else {
+    dizer(status, resp?.erro ?? 'Não foi possível salvar.');
+  }
+}
+
+function mostrarErrosDaConta(erros) {
+  if (erros.dominio) dizer($('conta-dominio-erro'), erros.dominio);
+  if (erros.email) dizer($('conta-email-erro'), erros.email);
+  if (erros.senha) dizer($('conta-senha-erro'), erros.senha);
+  if (erros.rotulo) dizer($('conta-rotulo-erro'), erros.rotulo);
+}
+
 /* -------------------------------- exclusão -------------------------------- */
 
-function abrirDialogoExclusao() {
+// O diálogo é compartilhado por MFA e conta: o alvo diz o que confirmar/excluir.
+function abrirDialogoExclusao(alvo) {
+  if (!alvo?.id) return;
+  alvoExclusao = alvo;
+  dizer(
+    $('dialog-excluir-msg'),
+    alvo.tipo === 'conta'
+      ? 'Excluir este e-mail e senha? Essa ação não pode ser desfeita.'
+      : 'Tem certeza? Essa ação não pode ser desfeita.',
+  );
   $('dialog-excluir').hidden = false;
 }
 
 function fecharDialogoExclusao() {
+  alvoExclusao = null;
   $('dialog-excluir').hidden = true;
 }
 
 async function confirmarExclusao() {
+  const alvo = alvoExclusao;
   fecharDialogoExclusao();
-  if (edicaoId === null) return;
-  const resp = await enviar({ type: 'DELETE_MFA', id: edicaoId });
+  if (!alvo?.id) return;
+
+  if (alvo.tipo === 'conta') {
+    const resp = await enviar({ type: 'DELETE_CONTA', id: alvo.id });
+    if (!resp?.ok) {
+      dizer($('conta-status'), 'Não foi possível excluir.');
+      return;
+    }
+    await atualizarResumoContas();
+    await abrirContas(dominioContas ?? dominioAtual, voltarDeContas);
+    return;
+  }
+
+  const resp = await enviar({ type: 'DELETE_MFA', id: alvo.id });
   if (resp?.ok) await abrirPrincipal();
   else dizer($('mfa-status'), 'Não foi possível excluir.');
 }
@@ -602,6 +1014,7 @@ async function abrirConfig() {
   $('ts-conf').value = '';
   renderizarForcaSenha($('ts-forca'), '');
   limpar($('af-status'));
+  limpar($('al-status'));
   limpar($('sessao-status'));
   limpar($('geral-status'));
   const resp = await enviar({ type: 'GET_CONFIG' });
@@ -617,6 +1030,7 @@ async function abrirConfig() {
   $('rl-atrasomax').value = Math.round(c.atrasoMaxMs / 1000);
 
   const af = resp.autofill ?? {};
+  configAutofillCache = af; // os dois blocos salvam a config inteira: guarde-a
   $('af-habilitado').checked = Boolean(af.habilitado);
   $('af-fechar').checked = Boolean(af.fecharAoPreencher);
   $('af-seletor-padrao').value = af.seletorPadrao ?? '';
@@ -624,6 +1038,46 @@ async function abrirConfig() {
   for (const [dominio, seletor] of Object.entries(af.porDominio ?? {})) {
     adicionarLinhaDominio(dominio, seletor);
   }
+
+  const login = af.login ?? {};
+  $('al-habilitado').checked = Boolean(login.habilitado);
+  $('al-submeter').checked = Boolean(login.submeter);
+  $('al-seletor-email').value = login.seletorEmailPadrao ?? '';
+  $('al-seletor-senha').value = login.seletorSenhaPadrao ?? '';
+  $('al-dominios').replaceChildren();
+  for (const [dominio, seletores] of Object.entries(login.porDominio ?? {})) {
+    adicionarLinhaDominioLogin(dominio, seletores.email ?? '', seletores.senha ?? '');
+  }
+}
+
+// Linha editável de "domínio → seletor de e-mail + seletor de senha" (task 30).
+function adicionarLinhaDominioLogin(dominio, seletorEmail, seletorSenha) {
+  const linha = document.createElement('div');
+  linha.className = 'al-linha';
+
+  const campo = (classe, placeholder, valor) => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = `field__input ${classe}`;
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    input.value = valor;
+    return input;
+  };
+
+  const remover = document.createElement('button');
+  remover.type = 'button';
+  remover.className = 'btn-link al-linha__rm';
+  remover.textContent = 'remover';
+  remover.addEventListener('click', () => linha.remove());
+
+  linha.append(
+    campo('al-linha__dom', 'domínio (ex: github.com)', dominio),
+    campo('al-linha__email', 'seletor do e-mail', seletorEmail),
+    campo('al-linha__senha', 'seletor da senha', seletorSenha),
+    remover,
+  );
+  $('al-dominios').append(linha);
 }
 
 // Cria uma linha editável de "domínio → seletor". Tudo via DOM API (sem innerHTML).
@@ -667,7 +1121,9 @@ async function aoSalvarAutofill(evento) {
     if (dom !== '' && sel !== '') porDominio[dom] = sel;
   }
 
+  // SET_AUTOFILL grava a config INTEIRA: preserve o bloco de login deste form.
   const config = {
+    ...(configAutofillCache ?? {}),
     habilitado: $('af-habilitado').checked,
     seletorPadrao: $('af-seletor-padrao').value,
     fecharAoPreencher: $('af-fechar').checked,
@@ -675,10 +1131,54 @@ async function aoSalvarAutofill(evento) {
   };
   const resp = await enviar({ type: 'SET_AUTOFILL', config });
   if (resp?.ok) {
+    configAutofillCache = resp.autofill;
     $('af-seletor-padrao').value = resp.autofill.seletorPadrao;
     $('af-dominios').replaceChildren();
     for (const [d, s] of Object.entries(resp.autofill.porDominio)) adicionarLinhaDominio(d, s);
     dizer(status, 'Autopreenchimento salvo.');
+  } else {
+    dizer(status, 'Não foi possível salvar.');
+  }
+}
+
+async function aoSalvarAutofillLogin(evento) {
+  evento.preventDefault();
+  const status = $('al-status');
+  limpar(status);
+
+  const porDominio = {};
+  for (const linha of $('al-dominios').querySelectorAll('.al-linha')) {
+    const dom = linha.querySelector('.al-linha__dom').value.trim().toLowerCase();
+    const email = linha.querySelector('.al-linha__email').value.trim();
+    const senha = linha.querySelector('.al-linha__senha').value.trim();
+    if (dom === '' || (email === '' && senha === '')) continue;
+    porDominio[dom] = {};
+    if (email !== '') porDominio[dom].email = email;
+    if (senha !== '') porDominio[dom].senha = senha;
+  }
+
+  // Preserva o bloco do código (OTP), salvo no outro formulário.
+  const config = {
+    ...(configAutofillCache ?? {}),
+    login: {
+      habilitado: $('al-habilitado').checked,
+      submeter: $('al-submeter').checked,
+      seletorEmailPadrao: $('al-seletor-email').value,
+      seletorSenhaPadrao: $('al-seletor-senha').value,
+      porDominio,
+    },
+  };
+  const resp = await enviar({ type: 'SET_AUTOFILL', config });
+  if (resp?.ok) {
+    configAutofillCache = resp.autofill;
+    const login = resp.autofill.login;
+    $('al-seletor-email').value = login.seletorEmailPadrao;
+    $('al-seletor-senha').value = login.seletorSenhaPadrao;
+    $('al-dominios').replaceChildren();
+    for (const [d, sel] of Object.entries(login.porDominio)) {
+      adicionarLinhaDominioLogin(d, sel.email ?? '', sel.senha ?? '');
+    }
+    dizer(status, 'Autopreenchimento de login salvo.');
   } else {
     dizer(status, 'Não foi possível salvar.');
   }
