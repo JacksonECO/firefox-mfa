@@ -86,10 +86,24 @@ export async function definirSenhaMestra(senha) {
  * @returns {Promise<boolean>} true se a senha estava correta.
  */
 export async function desbloquear(senha, { esperar = esperaReal } = {}) {
-  if (typeof senha !== 'string' || senha.length === 0) return false;
+  const chave = await conferirSenhaMestra(senha, esperar);
+  if (!chave) return false;
+  await carregarTimeout();
+  ativarSessao(chave);
+  return true;
+}
+
+/**
+ * Núcleo da verificação da senha mestra, compartilhado pelo desbloqueio e pela
+ * reautenticação de ações sensíveis. Aplica o atraso progressivo ANTES de
+ * verificar, atualiza o contador de tentativas e devolve a chave derivada
+ * (ou null). Não mexe na sessão — quem chama decide o que fazer com a chave.
+ */
+async function conferirSenhaMestra(senha, esperar) {
+  if (typeof senha !== 'string' || senha.length === 0) return null;
   const salt = await storage.obterSalt();
   const controle = await storage.obterValorControle();
-  if (!salt || !controle) return false; // ainda não inicializado
+  if (!salt || !controle) return null; // ainda não inicializado
 
   const tentativas = await storage.obterTentativas();
   const config = normalizarConfigRateLimit((await storage.obterConfigRateLimit()) ?? {});
@@ -100,12 +114,20 @@ export async function desbloquear(senha, { esperar = esperaReal } = {}) {
     await cripto.descriptografar(controle.ciphertext, controle.iv, chave);
   } catch {
     await storage.salvarTentativas(tentativas + 1); // senha incorreta
-    return false;
+    return null;
   }
   await storage.resetarTentativas(); // acerto: zera a fricção
-  await carregarTimeout();
-  ativarSessao(chave);
-  return true;
+  return chave;
+}
+
+/**
+ * Reautenticação para ações sensíveis (exportar dados, task 31): confere a
+ * senha mestra SEM abrir nem renovar sessão. Passa pelo mesmo rate limiting do
+ * desbloqueio, para não virar um caminho de força bruta sem fricção.
+ * @returns {Promise<boolean>} true se a senha estava correta.
+ */
+export async function verificarSenhaMestra(senha, { esperar = esperaReal } = {}) {
+  return (await conferirSenhaMestra(senha, esperar)) !== null;
 }
 
 /**

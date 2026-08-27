@@ -152,7 +152,11 @@ test('EXPORT_DATA → IMPORT_DATA reconstrói os MFAs (códigos preservados)', a
   await salvar('GitHub', 'github.com', SEGREDO);
   await salvar('Conta', 'site.com', OUTRO_SEGREDO);
 
-  const exp = await bg.rotear({ type: 'EXPORT_DATA', senha: 'backup-123' });
+  const exp = await bg.rotear({
+    type: 'EXPORT_DATA',
+    senhaMestra: 'senha-mestra-123',
+    senha: 'backup-123',
+  });
   assert.equal(exp.ok, true);
   assert.ok(!JSON.stringify(exp.arquivo).includes(SEGREDO)); // nada em claro no arquivo
 
@@ -172,7 +176,11 @@ test('EXPORT_DATA → IMPORT_DATA reconstrói os MFAs (códigos preservados)', a
 
 test('IMPORT_DATA com senha errada não importa nada', async () => {
   await salvar('GitHub', 'github.com');
-  const exp = await bg.rotear({ type: 'EXPORT_DATA', senha: 'certa' });
+  const exp = await bg.rotear({
+    type: 'EXPORT_DATA',
+    senhaMestra: 'senha-mestra-123',
+    senha: 'certa',
+  });
 
   globalThis.browser = criarBrowserMock();
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'm' });
@@ -185,7 +193,11 @@ test('EXPORT_DATA inclui as configurações atuais; IMPORT_DATA pode aplicá-las
   await salvar('GitHub', 'github.com');
   await bg.rotear({ type: 'SET_AUTOCOPY', habilitado: true }); // difere do padrão (desligado)
   await bg.rotear({ type: 'SET_SESSION_TIMEOUT', ms: 90000 });
-  const exp = await bg.rotear({ type: 'EXPORT_DATA', senha: 'backup' });
+  const exp = await bg.rotear({
+    type: 'EXPORT_DATA',
+    senhaMestra: 'senha-mestra-123',
+    senha: 'backup',
+  });
 
   // Cofre novo com configurações padrão
   globalThis.browser = criarBrowserMock();

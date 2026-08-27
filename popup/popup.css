@@ -775,3 +775,40 @@ body.pagina {
 .al-linha__dom {
   grid-column: 1 / -1;
 }
+
+/* Seleção de domínios na exportação (task 31) */
+
+.dominios {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.dominios__topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.dominio-linha {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.dominio-linha__nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dominio-linha__contagem {
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+}

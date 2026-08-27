@@ -9,17 +9,54 @@
 import * as cripto from './crypto.js';
 
 const FORMATO = 'firefox-mfa-export';
-const VERSAO = 1;
+const VERSAO = 2; // v2 acrescentou as contas do site (e-mail + senha)
 
 /**
- * Gera o objeto de backup (serializável em JSON) a partir dos registros com o
- * segredo já em claro e, opcionalmente, das configurações atuais.
- * @param {Array<{nome:string, dominio:string|null, secret:string}>} registros
- * @param {object|null} configuracoes configurações não sensíveis (ou null)
+ * Filtro da exportação (task 31): o usuário escolhe QUAIS domínios e QUAIS
+ * tipos de dado saem no arquivo. `dominios: null` significa "todos"; um array
+ * seleciona domínios exatos e aceita `null` para os MFAs sem domínio.
+ */
+export const FILTRO_PADRAO = Object.freeze({
+  incluirMfas: true,
+  incluirContas: true,
+  incluirConfig: true,
+  dominios: null,
+});
+
+export function normalizarFiltroExport(parcial = {}) {
+  const origem = parcial && typeof parcial === 'object' ? parcial : {};
+  const marcado = (valor) => valor !== false; // ausente ⇒ incluir
+  let dominios = null;
+  if (Array.isArray(origem.dominios)) {
+    dominios = origem.dominios.map((d) =>
+      typeof d === 'string' && d.trim() !== '' ? d.trim().toLowerCase() : null,
+    );
+  }
+  return {
+    incluirMfas: marcado(origem.incluirMfas),
+    incluirContas: marcado(origem.incluirContas),
+    incluirConfig: marcado(origem.incluirConfig),
+    dominios,
+  };
+}
+
+/** Este domínio foi selecionado para exportar? */
+export function dominioSelecionado(filtro, dominio) {
+  if (!filtro || filtro.dominios === null) return true;
+  return filtro.dominios.includes(dominio ?? null);
+}
+
+/**
+ * Gera o objeto de backup (serializável em JSON) a partir do conteúdo já em
+ * claro — MFAs, contas do site e, opcionalmente, as configurações.
+ * @param {{mfas?: Array, contas?: Array, configuracoes?: object|null}} conteudo
  * @param {string} senhaExport
  * @returns {Promise<object>} arquivo de backup criptografado.
  */
-export async function exportarDados(registros, configuracoes, senhaExport) {
+export async function exportarDados(
+  { mfas = [], contas = [], configuracoes = null } = {},
+  senhaExport,
+) {
   if (typeof senhaExport !== 'string' || senhaExport === '') {
     throw new Error('Senha de exportação obrigatória.');
   }
@@ -27,7 +64,7 @@ export async function exportarDados(registros, configuracoes, senhaExport) {
   const chave = await cripto.derivarChave(senhaExport, salt);
 
   const controle = await cripto.criptografar(cripto.VALOR_CONTROLE, chave);
-  const payload = { mfas: registros, configuracoes: configuracoes ?? null };
+  const payload = { mfas, contas, configuracoes: configuracoes ?? null };
   const dados = await cripto.criptografar(JSON.stringify(payload), chave);
 
   return {
@@ -44,7 +81,7 @@ export async function exportarDados(registros, configuracoes, senhaExport) {
  * Decifra um arquivo de backup com a senha de exportação.
  * @param {object} arquivo objeto de backup (já parseado de JSON)
  * @param {string} senhaExport
- * @returns {Promise<{mfas: Array, configuracoes: object|null}>}
+ * @returns {Promise<{mfas: Array, contas: Array, configuracoes: object|null}>}
  * @throws se a senha estiver errada ou o arquivo for inválido.
  */
 export async function importarDados(arquivo, senhaExport) {
@@ -68,10 +105,15 @@ export async function importarDados(arquivo, senhaExport) {
   const json = await cripto.descriptografar(arquivo.dados.ciphertext, arquivo.dados.iv, chave);
   const conteudo = JSON.parse(json);
 
-  // Compat: o formato antigo guardava só um array de MFAs.
-  if (Array.isArray(conteudo)) return { mfas: conteudo, configuracoes: null };
+  // Compat: o formato mais antigo guardava só um array de MFAs; a v1 tinha
+  // MFAs + configurações, sem contas.
+  if (Array.isArray(conteudo)) return { mfas: conteudo, contas: [], configuracoes: null };
   if (conteudo && Array.isArray(conteudo.mfas)) {
-    return { mfas: conteudo.mfas, configuracoes: conteudo.configuracoes ?? null };
+    return {
+      mfas: conteudo.mfas,
+      contas: Array.isArray(conteudo.contas) ? conteudo.contas : [],
+      configuracoes: conteudo.configuracoes ?? null,
+    };
   }
   throw new Error('Conteúdo de backup inválido.');
 }

@@ -14,7 +14,12 @@ import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
 import { validarConta } from './conta.js';
 import { ehLocalhost, normalizarDominio } from './dominio.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
-import { exportarDados, importarDados } from './backup.js';
+import {
+  exportarDados,
+  importarDados,
+  normalizarFiltroExport,
+  dominioSelecionado,
+} from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
 import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
 import { preencherLogin, resolverSeletorLogin } from './autofilllogin.js';
@@ -175,8 +180,9 @@ async function preencherLoginNaAba({ conta, chave, tabId }) {
  *  - REVEAL_SECRET      → { ok, secret } (exceção do fluxo de edição) (task 09)
  *  - UPDATE_MFA         → { ok, mfa? , erro?/erros? }           (task 09)
  *  - DELETE_MFA         → { ok, removidos }                     (task 09)
- *  - EXPORT_DATA        → { ok, arquivo }                       (task 14)
- *  - IMPORT_DATA        → { ok, importados }                    (task 14)
+ *  - EXPORT_DATA        → { ok, arquivo } (senha mestra + filtro) (tasks 14/31)
+ *  - EXPORT_RESUMO      → { ok, dominios } (o que há p/ exportar)  (task 31)
+ *  - IMPORT_DATA        → { ok, importados, contasImportadas }     (tasks 14/31)
  *  - LIST_CONTAS        → { ok, contas } (com e-mail, sem senha) (task 30)
  *  - CONTAS_RESUMO      → { ok, porDominio } (só contagem)       (task 30)
  *  - REVEAL_CONTA       → { ok, email, senha } (só na edição)    (task 30)
@@ -539,36 +545,79 @@ export async function rotear(mensagem) {
     }
 
     case 'EXPORT_DATA': {
+      // Exportar é o momento em que TUDO existe em claro na memória: por isso
+      // exige a senha mestra de novo (reautenticação, com o mesmo rate limiting
+      // do desbloqueio), além da senha que criptografa o arquivo.
       const chave = sessao.obterChave();
       if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
       if (!mensagem.senha) return { ok: false, erro: 'SENHA_OBRIGATORIA' };
+      if (!mensagem.senhaMestra) return { ok: false, erro: 'SENHA_MESTRA_OBRIGATORIA' };
+      if (!(await sessao.verificarSenhaMestra(mensagem.senhaMestra))) {
+        return { ok: false, erro: 'SENHA_MESTRA_INCORRETA' };
+      }
       try {
-        // Descriptografa cada segredo localmente e reembala no arquivo, que é
-        // criptografado com a senha de exportação. Nada em claro vai ao arquivo.
-        const todos = await storage.listarMfas();
-        const registros = [];
-        for (const mfa of todos) {
-          const secret = await lerSegredo(mfa, chave);
-          registros.push({
-            nome: mfa.nome,
-            dominio: mfa.dominio,
-            secret,
-            semCriptografia: mfa.semCriptografia === true,
-          });
+        // Descriptografa localmente e reembala no arquivo, que é criptografado
+        // com a senha de exportação. Nada em claro vai ao arquivo.
+        const filtro = normalizarFiltroExport(mensagem.filtro);
+        const mfas = [];
+        if (filtro.incluirMfas) {
+          for (const mfa of await storage.listarMfas()) {
+            if (!dominioSelecionado(filtro, mfa.dominio)) continue;
+            mfas.push({
+              nome: mfa.nome,
+              dominio: mfa.dominio,
+              secret: await lerSegredo(mfa, chave),
+              semCriptografia: mfa.semCriptografia === true,
+            });
+          }
         }
-        const configuracoes = await coletarConfiguracoes();
-        const arquivo = await exportarDados(registros, configuracoes, mensagem.senha);
-        return { ok: true, arquivo };
+        const contas = [];
+        if (filtro.incluirContas) {
+          for (const conta of await storage.listarContas()) {
+            if (!dominioSelecionado(filtro, conta.dominio)) continue;
+            const credenciais = await lerCredenciais(conta, chave);
+            contas.push({
+              dominio: conta.dominio,
+              rotulo: conta.rotulo ?? null,
+              email: credenciais.email,
+              senha: credenciais.senha,
+              principal: conta.principal === true,
+              semCriptografia: conta.semCriptografia === true,
+            });
+          }
+        }
+        const configuracoes = filtro.incluirConfig ? await coletarConfiguracoes() : null;
+        const arquivo = await exportarDados({ mfas, contas, configuracoes }, mensagem.senha);
+        return { ok: true, arquivo, exportados: { mfas: mfas.length, contas: contas.length } };
       } catch (erro) {
         return { ok: false, erro: erro.message };
       }
+    }
+
+    case 'EXPORT_RESUMO': {
+      // O que existe para exportar, por domínio — só metadados (nome do domínio
+      // e contagens). Alimenta a seleção de domínios da tela de backup.
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const porDominio = new Map();
+      const entrada = (dominio) => {
+        const chaveMapa = dominio ?? null;
+        if (!porDominio.has(chaveMapa)) porDominio.set(chaveMapa, { dominio: chaveMapa, mfas: 0, contas: 0 });
+        return porDominio.get(chaveMapa);
+      };
+      for (const mfa of await storage.listarMfas()) entrada(mfa.dominio).mfas += 1;
+      for (const conta of await storage.listarContas()) entrada(conta.dominio).contas += 1;
+      return { ok: true, dominios: [...porDominio.values()] };
     }
 
     case 'IMPORT_DATA': {
       const chave = sessao.obterChave();
       if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
       try {
-        const { mfas, configuracoes } = await importarDados(mensagem.arquivo, mensagem.senha);
+        const { mfas, contas, configuracoes } = await importarDados(
+          mensagem.arquivo,
+          mensagem.senha,
+        );
         // Re-criptografa cada registro com a chave local e acrescenta ao cofre.
         let importados = 0;
         for (const reg of mfas) {
@@ -586,12 +635,34 @@ export async function rotear(mensagem) {
           }
           importados += 1;
         }
+
+        // Contas: `principal: false` deixa a decisão para a invariante do
+        // storage — se o domínio ainda não tem principal, a importada vira a
+        // principal; se já tem, a que estava aqui continua sendo.
+        let contasImportadas = 0;
+        for (const reg of contas) {
+          if (!reg?.dominio || !reg?.email || !reg?.senha) continue;
+          const dados = {
+            dominio: reg.dominio,
+            rotulo: reg.rotulo ?? null,
+            email: reg.email,
+            senha: reg.senha,
+            principal: false,
+          };
+          if (reg.semCriptografia && ehLocalhost(dados.dominio)) {
+            await storage.salvarContaSemCripto(dados);
+          } else {
+            await storage.salvarConta(dados, chave);
+          }
+          contasImportadas += 1;
+        }
+
         let configImportada = false;
         if (mensagem.importarConfig && configuracoes) {
           await aplicarConfiguracoes(configuracoes);
           configImportada = true;
         }
-        return { ok: true, importados, configImportada };
+        return { ok: true, importados, contasImportadas, configImportada };
       } catch {
         return { ok: false, erro: 'SENHA_OU_ARQUIVO_INVALIDO' };
       }
