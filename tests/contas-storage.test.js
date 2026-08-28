@@ -137,6 +137,35 @@ test('mudar o domínio renormaliza a principal dos dois lados', async () => {
   assert.equal(gl[0].principal, true, 'no destino também há uma principal');
 });
 
+test('mover a conta mais antiga para um domínio que já tem principal NÃO rouba a principal', async () => {
+  // Regressão: `atualizarConta` não pode carregar `principal:true` do domínio
+  // de origem para o destino quando o usuário não pediu isso explicitamente —
+  // mesmo que a conta movida seja mais antiga (o desempate por idade não pode
+  // se sobrepor à escolha já feita no domínio de destino).
+  const antiga = await storage.salvarConta(conta({ dominio: 'foo.com' }), CHAVE);
+  const principalNoDestino = await storage.salvarConta(conta({ dominio: 'bar.com' }), CHAVE);
+  assert.ok(antiga.createdAt <= principalNoDestino.createdAt);
+
+  await storage.atualizarConta(antiga.id, { dominio: 'bar.com' }, CHAVE); // sem `principal`
+
+  const doDestino = await storage.listarContasPorDominio('bar.com');
+  const movida = doDestino.find((c) => c.id === antiga.id);
+  const original = doDestino.find((c) => c.id === principalNoDestino.id);
+  assert.equal(movida.principal, false, 'a conta movida não deve virar principal sozinha');
+  assert.equal(original.principal, true, 'a principal do destino deve continuar sendo a mesma');
+});
+
+test('mover a conta com `principal: true` explícito assume a principal do destino', async () => {
+  const antiga = await storage.salvarConta(conta({ dominio: 'foo.com' }), CHAVE);
+  await storage.salvarConta(conta({ dominio: 'bar.com' }), CHAVE);
+
+  await storage.atualizarConta(antiga.id, { dominio: 'bar.com', principal: true }, CHAVE);
+
+  const doDestino = await storage.listarContasPorDominio('bar.com');
+  assert.equal(doDestino.find((c) => c.id === antiga.id).principal, true);
+  assert.equal(doDestino.filter((c) => c.principal).length, 1);
+});
+
 test('contarContasPorDominio conta sem decifrar', async () => {
   await storage.salvarConta(conta(), CHAVE);
   await storage.salvarConta(conta({ email: 'b@x.com' }), CHAVE);

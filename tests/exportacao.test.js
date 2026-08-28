@@ -192,3 +192,61 @@ test('exportar e ver o resumo exigem sessão', async () => {
   assert.equal((await exportar()).erro, 'SESSAO_BLOQUEADA');
   assert.equal((await bg.rotear({ type: 'EXPORT_RESUMO' })).erro, 'SESSAO_BLOQUEADA');
 });
+
+test('IMPORT_DATA normaliza domínio com grafia divergente (não fica órfão)', async () => {
+  // Simula um arquivo de backup montado à mão (ou por um formato de terceiros),
+  // que não passou pela normalização de SAVE_MFA/SAVE_CONTA — exatamente o
+  // caminho que IMPORT_DATA precisa cobrir sozinho, sem depender do storage.
+  const { exportarDados } = await import('../src/backup.js');
+  const arquivo = await exportarDados(
+    {
+      mfas: [{ nome: 'GitHub', dominio: ' GitHub.COM ', secret: SEGREDO }],
+      contas: [
+        {
+          dominio: 'GitHub.COM',
+          email: 'eu@exemplo.com',
+          senha: 'senha-do-site',
+          principal: true,
+        },
+      ],
+    },
+    'arquivo-123',
+  );
+
+  const imp = await bg.rotear({ type: 'IMPORT_DATA', arquivo, senha: 'arquivo-123' });
+  assert.equal(imp.importados, 1);
+  assert.equal(imp.contasImportadas, 1);
+
+  // Encontrável pelo filtro exato em minúsculo — a comparação de domínio do
+  // produto inteiro é exata (extrairDominioDaAba também devolve minúsculo).
+  const mfas = await bg.rotear({ type: 'LIST_MFAS' });
+  assert.equal(mfas.mfas[0].dominio, 'github.com');
+  const contas = await bg.rotear({ type: 'LIST_CONTAS', dominio: 'github.com' });
+  assert.equal(contas.contas.length, 1);
+  assert.equal(contas.contas[0].dominio, 'github.com');
+});
+
+test('EXPORT_DATA recusa seleção de domínios vazia (não gera um arquivo vazio)', async () => {
+  await cofreDeExemplo();
+  const r = await exportar({ filtro: { dominios: [] } });
+  assert.deepEqual(r, { ok: false, erro: 'NENHUM_SITE_SELECIONADO' });
+});
+
+test('EXPORT_DATA com dominios:null (todos) continua funcionando normalmente', async () => {
+  await cofreDeExemplo();
+  const r = await exportar({ filtro: { dominios: null } });
+  assert.equal(r.ok, true);
+});
+
+test('EXPORT_DATA devolve um código estável, nunca a mensagem interna da exceção', async () => {
+  await bg.rotear({ type: 'SAVE_MFA', nome: 'GitHub', dominio: 'github.com', secret: SEGREDO });
+  // Corrompe o IV do registro salvo: força `lerSegredo`/decrypt a falhar,
+  // simulando um dado corrompido no storage.
+  const mfas = globalThis.browser._dados.get('mfaItems');
+  mfas[0].iv = 'aWQtaW52YWxpZG8='; // base64 válido, mas não é o IV certo
+  globalThis.browser._dados.set('mfaItems', mfas);
+
+  const r = await exportar();
+  assert.equal(r.ok, false);
+  assert.equal(r.erro, 'FALHA_EXPORTACAO');
+});

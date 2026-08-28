@@ -41,23 +41,27 @@ export function pararTicker() {
  * @param {HTMLElement} container
  * @param {Array} itens metadados dos MFAs (id, nome, dominio)
  * @param {{obterCodigo: (id:string)=>Promise<any>, aoEditar: (id:string)=>void,
- *         contasPorDominio?: Record<string, number>,
+ *         contasPorDominio?: Record<string, number>, dominioAtual?: string|null,
  *         aoPreencherLogin?: (dominio:string)=>Promise<boolean>}} cbs
  *   `contasPorDominio` só informa a CONTAGEM de contas por domínio — o card
  *   nunca vê e-mail nem senha; ele apenas mostra o ícone e pede o preenchimento.
+ *   `dominioAtual` restringe o ícone ao card do site aberto na aba: no modo
+ *   "ver todos" a lista mostra MFAs de vários domínios, e o autopreenchimento
+ *   de login só faz sentido para aquele que a aba ativa realmente é (o
+ *   background também confere isso — este é só o reforço na UI).
  * @returns {Promise<Array>} os controladores criados (cada um expõe `.codigo`).
  */
 export async function renderizarLista(
   container,
   itens,
-  { obterCodigo, aoEditar, contasPorDominio = {}, aoPreencherLogin = null },
+  { obterCodigo, aoEditar, contasPorDominio = {}, dominioAtual = null, aoPreencherLogin = null },
 ) {
   pararTicker();
   container.replaceChildren();
 
   const template = document.getElementById('tpl-card');
   controladores = itens.map((mfa) =>
-    criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, aoPreencherLogin }),
+    criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, dominioAtual, aoPreencherLogin }),
   );
   for (const c of controladores) container.append(c.el);
 
@@ -80,7 +84,7 @@ function tique() {
   }
 }
 
-function criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, aoPreencherLogin }) {
+function criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, dominioAtual, aoPreencherLogin }) {
   const fragmento = template.content.cloneNode(true);
   const el = fragmento.querySelector('.card');
 
@@ -137,9 +141,11 @@ function criarCard(template, mfa, { obterCodigo, aoEditar, contasPorDominio, aoP
   });
 
   // Ícone indicativo: este site tem e-mail e senha salvos. Clicar preenche na
-  // página (a senha nunca passa por aqui — quem injeta é o background).
+  // página (a senha nunca passa por aqui — quem injeta é o background). Só no
+  // card do domínio da aba ativa: no modo "ver todos" outros cards são de
+  // outros sites, e preencher ali injetaria a credencial errada na aba atual.
   const botaoContas = el.querySelector('.card__contas');
-  if (mfa.dominio && (contasPorDominio?.[mfa.dominio] ?? 0) > 0) {
+  if (mfa.dominio && mfa.dominio === dominioAtual && (contasPorDominio?.[mfa.dominio] ?? 0) > 0) {
     botaoContas.hidden = false;
     if (typeof aoPreencherLogin === 'function') {
       botaoContas.addEventListener('click', () => aoPreencherLogin(mfa.dominio));

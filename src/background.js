@@ -12,7 +12,7 @@ import * as storage from './storage.js';
 import * as cripto from './crypto.js';
 import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
 import { validarConta } from './conta.js';
-import { ehLocalhost, normalizarDominio } from './dominio.js';
+import { ehLocalhost, normalizarDominio, extrairDominioDaAba } from './dominio.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
 import {
   exportarDados,
@@ -134,6 +134,21 @@ async function preencherLoginNaAba({ conta, chave, tabId, config }) {
   if (!conta) return { ok: false, erro: 'SEM_CONTA' };
   if (typeof tabId !== 'number') return { ok: false, erro: 'SEM_ABA' };
   if (!globalThis.browser?.scripting?.executeScript) return { ok: false, erro: 'SEM_SCRIPTING' };
+
+  // Defesa em profundidade: o popup escolhe QUAL domínio preencher, mas nunca
+  // decide sozinho PARA ONDE a senha vai. Sem esta checagem, um domínio sem
+  // MFA cai no modo "ver todos" da listagem e mostra cards de outros sites —
+  // clicar no ícone injetaria a credencial de um domínio na aba de outro.
+  let aba;
+  try {
+    [aba] = await browser.tabs.query({ active: true, currentWindow: true });
+  } catch {
+    return { ok: false, erro: 'ABA_INVALIDA' };
+  }
+  if (!aba || aba.id !== tabId) return { ok: false, erro: 'ABA_INVALIDA' };
+  if (extrairDominioDaAba(aba) !== conta.dominio) {
+    return { ok: false, erro: 'DOMINIO_DIVERGENTE' };
+  }
 
   const seletores = resolverSeletorLogin(config, conta.dominio);
   let credenciais;
@@ -501,14 +516,18 @@ export async function rotear(mensagem) {
 
     case 'AUTOFILL_LOGIN': {
       // A senha vai do background direto para a aba — o popup só pede.
-      // `habilitado` governa a ação automática ao abrir; um pedido explícito do
-      // usuário (manual) vale mesmo com a opção automática desligada.
+      // `habilitado` governa TANTO a ação automática ao abrir QUANTO o clique
+      // manual no ícone do card: diferente da autocópia do código (que só
+      // copia para a área de transferência, sem tocar na página), preencher
+      // login ESCREVE a senha no DOM da página — qualquer script ali presente
+      // pode lê-la. Por isso não há bypass "manual" aqui: com a opção
+      // desligada, nenhum caminho preenche, nem automático nem por clique.
       const chave = sessao.obterChave();
       if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
       const config = normalizarConfigAutofill(
         (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
       );
-      if (!config.login.habilitado && mensagem.manual !== true) {
+      if (!config.login.habilitado) {
         return { ok: false, erro: 'DESABILITADO' };
       }
       const dominio = normalizarDominio(mensagem.dominio);
@@ -524,12 +543,13 @@ export async function rotear(mensagem) {
 
     case 'AUTOFILL_LOGIN_LOCALHOST': {
       // Fluxo localhost sem senha mestra: só contas sem criptografia do host
-      // local — mesmo guard duplo do LIST_CONTAS_LOCALHOST.
+      // local — mesmo guard duplo do LIST_CONTAS_LOCALHOST. Mesma regra do
+      // caso acima: sem bypass manual, `habilitado` governa os dois caminhos.
       if (!ehLocalhost(mensagem.dominio)) return { ok: false, erro: 'NAO_PERMITIDO' };
       const config = normalizarConfigAutofill(
         (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
       );
-      if (!config.login.habilitado && mensagem.manual !== true) {
+      if (!config.login.habilitado) {
         return { ok: false, erro: 'DESABILITADO' };
       }
       const todas = await storage.listarContas();
@@ -560,6 +580,17 @@ export async function rotear(mensagem) {
         // Descriptografa localmente e reembala no arquivo, que é criptografado
         // com a senha de exportação. Nada em claro vai ao arquivo.
         const filtro = normalizarFiltroExport(mensagem.filtro);
+        // Defesa em profundidade: o popup já impede confirmar sem nenhum site
+        // marcado, mas o background (que não deve confiar só na UI) recusa um
+        // arquivo vazio da mesma forma — `dominios: []` é uma seleção
+        // explicitamente vazia, diferente de `null` ("todos os sites").
+        if (
+          Array.isArray(filtro.dominios) &&
+          filtro.dominios.length === 0 &&
+          (filtro.incluirMfas || filtro.incluirContas)
+        ) {
+          return { ok: false, erro: 'NENHUM_SITE_SELECIONADO' };
+        }
         const mfas = [];
         if (filtro.incluirMfas) {
           for (const mfa of await storage.listarMfas()) {
@@ -590,8 +621,10 @@ export async function rotear(mensagem) {
         const configuracoes = filtro.incluirConfig ? await coletarConfiguracoes() : null;
         const arquivo = await exportarDados({ mfas, contas, configuracoes }, mensagem.senha);
         return { ok: true, arquivo, exportados: { mfas: mfas.length, contas: contas.length } };
-      } catch (erro) {
-        return { ok: false, erro: erro.message };
+      } catch {
+        // Código estável (nunca a mensagem interna da exceção) — mesma
+        // disciplina do IMPORT_DATA: a UI já mapeia só os códigos conhecidos.
+        return { ok: false, erro: 'FALHA_EXPORTACAO' };
       }
     }
 
@@ -620,13 +653,23 @@ export async function rotear(mensagem) {
           mensagem.senha,
         );
         // Re-criptografa cada registro com a chave local e acrescenta ao cofre.
+        // Cada item passa pela MESMA validação/normalização do cadastro manual
+        // (defesa em profundidade: um backup editado à mão, ou de um formato
+        // futuro de terceiros, não pode gravar um domínio com grafia divergente
+        // da usada nos filtros — que comparam string exata — nem um segredo em
+        // formato inválido).
         let importados = 0;
         for (const reg of mfas) {
-          if (!reg?.nome || !reg?.secret) continue;
+          const validacao = validarCadastro({
+            nome: reg?.nome,
+            dominio: reg?.dominio,
+            secret: reg?.secret,
+          });
+          if (!validacao.valido) continue;
           const dados = {
-            nome: reg.nome,
-            dominio: reg.dominio ?? null,
-            secretEmClaro: reg.secret,
+            nome: validacao.normalizado.nome,
+            dominio: validacao.normalizado.dominio,
+            secretEmClaro: validacao.normalizado.secret,
           };
           // Preserva o modo sem criptografia só se ainda for localhost.
           if (reg.semCriptografia && ehLocalhost(dados.dominio)) {
@@ -642,12 +685,18 @@ export async function rotear(mensagem) {
         // principal; se já tem, a que estava aqui continua sendo.
         let contasImportadas = 0;
         for (const reg of contas) {
-          if (!reg?.dominio || !reg?.email || !reg?.senha) continue;
+          const validacao = validarConta({
+            dominio: reg?.dominio,
+            email: reg?.email,
+            senha: reg?.senha,
+            rotulo: reg?.rotulo,
+          });
+          if (!validacao.valido) continue;
           const dados = {
-            dominio: reg.dominio,
-            rotulo: reg.rotulo ?? null,
-            email: reg.email,
-            senha: reg.senha,
+            dominio: validacao.normalizado.dominio,
+            rotulo: validacao.normalizado.rotulo,
+            email: validacao.normalizado.email,
+            senha: validacao.normalizado.senha,
             principal: false,
           };
           if (reg.semCriptografia && ehLocalhost(dados.dominio)) {

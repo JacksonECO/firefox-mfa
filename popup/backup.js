@@ -17,9 +17,36 @@ const dizer = (el, texto) => {
 // atributo de dataset.
 let caixasDominio = [];
 
+// Mantém a sessão viva enquanto esta aba estiver aberta — o mesmo mecanismo do
+// popup (ver popup.js): uma porta de longa duração suspende o timer de
+// inatividade do background até a aba fechar. Sem isto, a janela de 2 minutos
+// corre desde que o POPUP fechou (não desde que esta aba abriu), e o
+// formulário de exportação — que agora também pede a senha mestra — corre o
+// risco real de expirar no meio do preenchimento.
+let portaKeepalive = null;
+function manterSessaoViva() {
+  try {
+    portaKeepalive = browser.runtime.connect({ name: 'popup-keepalive' });
+  } catch {
+    portaKeepalive = null; // sem porta: volta ao comportamento por inatividade
+  }
+}
+
+// Mesmo throttle de popup.js: conta como atividade sem virar 1 mensagem/tecla.
+let ultimoPingAtividade = 0;
+function registrarAtividadeDigitando() {
+  const agora = Date.now();
+  if (agora - ultimoPingAtividade < 15_000) return;
+  ultimoPingAtividade = agora;
+  enviar({ type: 'PING' }).catch(() => {});
+}
+
 async function iniciar() {
+  manterSessaoViva();
   $('form-exportar').addEventListener('submit', aoExportar);
+  $('form-exportar').addEventListener('input', registrarAtividadeDigitando);
   $('form-importar').addEventListener('submit', aoImportar);
+  $('form-importar').addEventListener('input', registrarAtividadeDigitando);
   $('exportar-todos').addEventListener('click', alternarTodosDominios);
 
   let desbloqueado = false;
@@ -124,12 +151,14 @@ async function aoExportar(evento) {
     senha,
     filtro: { incluirMfas, incluirContas, incluirConfig, dominios },
   });
-  $('exportar-mestra').value = '';
-  $('exportar-senha').value = '';
   if (!resp?.ok) {
+    // Em caso de erro (senha mestra incorreta, sessão expirada), preserva o
+    // que foi digitado — não faz sentido obrigar a redigitar as duas senhas.
     dizer(erro, mensagemDeErroDeExportacao(resp?.erro));
     return;
   }
+  $('exportar-mestra').value = '';
+  $('exportar-senha').value = '';
   baixarJson(resp.arquivo, 'firefox-mfa-backup.json');
   const { mfas = 0, contas = 0 } = resp.exportados ?? {};
   dizer(status, `Backup baixado: ${mfas} MFA(s) e ${contas} conta(s).`);

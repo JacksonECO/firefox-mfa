@@ -50,6 +50,12 @@ fecha essa janela.
   estava na máquina continua sendo — importar um backup não muda silenciosamente qual conta o
   autopreenchimento usa.
 - `EXPORT_RESUMO` devolve só nome de domínio e contagens; não decifra nada.
+- **Seleção de domínios vazia é recusada no background** (`NENHUM_SITE_SELECIONADO`), não só
+  no popup: `dominios: []` (array vazio, diferente de `null` = todos) geraria um backup sem
+  nenhum MFA/conta se só a UI barrasse isso — o background é quem não deve confiar na UI.
+- **Falha na exportação devolve um código estável** (`FALHA_EXPORTACAO`), nunca a mensagem
+  interna da exceção — mesma disciplina do `IMPORT_DATA`, que já usa
+  `SENHA_OU_ARQUIVO_INVALIDO` em vez de vazar detalhe de implementação para a UI.
 
 ## Dependências
 

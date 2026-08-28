@@ -212,7 +212,11 @@ test('só a senha preenche quando a página não tem campo de usuário visível'
 globalThis.browser = criarBrowserMock();
 const bg = await import('../src/background.js');
 
-function comScripting() {
+// A verificação de segurança nova (o background confere que a aba ativa é
+// realmente do domínio da conta) exige simular `browser.tabs.query`. Por
+// padrão a aba ativa "aponta" para o mesmo domínio e tabId usados no teste;
+// passe `abaUrl`/`abaId` para simular uma aba de OUTRO domínio.
+function comScripting({ abaUrl = 'https://github.com/login', abaId = 1 } = {}) {
   const mock = criarBrowserMock();
   mock._injecoes = [];
   mock.scripting = {
@@ -220,6 +224,9 @@ function comScripting() {
       mock._injecoes.push(opcoes);
       return Promise.resolve([{ result: { ok: true, email: true, senha: true } }]);
     },
+  };
+  mock.tabs = {
+    query: () => Promise.resolve([{ id: abaId, url: abaUrl }]),
   };
   globalThis.browser = mock;
   return mock;
@@ -233,7 +240,7 @@ const contaGithub = {
 };
 
 test('AUTOFILL_LOGIN injeta a senha na aba a partir do background', async () => {
-  const mock = comScripting();
+  const mock = comScripting({ abaUrl: 'https://github.com/login', abaId: 7 });
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
   await bg.rotear(contaGithub);
   await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
@@ -249,25 +256,28 @@ test('AUTOFILL_LOGIN injeta a senha na aba a partir do background', async () => 
 });
 
 test('AUTOFILL_LOGIN usa a conta principal do domínio', async () => {
-  const mock = comScripting();
+  const mock = comScripting({ abaUrl: 'https://github.com/login', abaId: 1 });
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
   await bg.rotear(contaGithub);
   const segunda = await bg.rotear({ ...contaGithub, email: 'b@x.com', senha: 'senha-b' });
   await bg.rotear({ type: 'SET_CONTA_PRINCIPAL', id: segunda.conta.id });
+  await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
 
   await bg.rotear({ type: 'AUTOFILL_LOGIN', dominio: 'github.com', tabId: 1, manual: true });
   assert.equal(mock._injecoes[0].args[2], 'b@x.com');
   assert.equal(mock._injecoes[0].args[3], 'senha-b');
 });
 
-test('AUTOFILL_LOGIN desligado não injeta, mas o pedido manual injeta', async () => {
-  const mock = comScripting();
+test('AUTOFILL_LOGIN desligado não injeta — nem automático, nem manual', async () => {
+  // Diferente da autocópia do código (que só copia para a área de
+  // transferência), preencher login ESCREVE a senha no DOM da página — por
+  // isso não existe bypass "manual" para o interruptor `login.habilitado`.
+  const mock = comScripting({ abaUrl: 'https://github.com/login', abaId: 1 });
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
   await bg.rotear(contaGithub);
 
   const auto = await bg.rotear({ type: 'AUTOFILL_LOGIN', dominio: 'github.com', tabId: 1 });
   assert.deepEqual(auto, { ok: false, erro: 'DESABILITADO' });
-  assert.equal(mock._injecoes.length, 0);
 
   const manual = await bg.rotear({
     type: 'AUTOFILL_LOGIN',
@@ -275,7 +285,18 @@ test('AUTOFILL_LOGIN desligado não injeta, mas o pedido manual injeta', async (
     tabId: 1,
     manual: true,
   });
-  assert.equal(manual.ok, true);
+  assert.deepEqual(manual, { ok: false, erro: 'DESABILITADO' });
+  assert.equal(mock._injecoes.length, 0);
+
+  // Ligando a opção, o clique manual passa a funcionar.
+  await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
+  const depoisDeLigar = await bg.rotear({
+    type: 'AUTOFILL_LOGIN',
+    dominio: 'github.com',
+    tabId: 1,
+    manual: true,
+  });
+  assert.equal(depoisDeLigar.ok, true);
 });
 
 test('AUTOFILL_LOGIN exige sessão e não injeta com o cofre bloqueado', async () => {
@@ -297,6 +318,7 @@ test('AUTOFILL_LOGIN exige sessão e não injeta com o cofre bloqueado', async (
 test('AUTOFILL_LOGIN sem conta para o domínio não injeta', async () => {
   const mock = comScripting();
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
+  await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
   const r = await bg.rotear({
     type: 'AUTOFILL_LOGIN',
     dominio: 'sem-conta.com',
@@ -307,11 +329,48 @@ test('AUTOFILL_LOGIN sem conta para o domínio não injeta', async () => {
   assert.equal(mock._injecoes.length, 0);
 });
 
+test('AUTOFILL_LOGIN recusa quando a aba ativa não é do domínio pedido', async () => {
+  // O popup nunca deve conseguir escolher, sozinho, para onde a senha vai —
+  // o background confere a aba de destino contra o domínio da conta.
+  const mock = comScripting({ abaUrl: 'https://site-qualquer.com/', abaId: 1 });
+  await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
+  await bg.rotear(contaGithub);
+  await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
+
+  const r = await bg.rotear({
+    type: 'AUTOFILL_LOGIN',
+    dominio: 'github.com',
+    tabId: 1,
+    manual: true,
+  });
+  assert.deepEqual(r, { ok: false, erro: 'DOMINIO_DIVERGENTE' });
+  assert.equal(mock._injecoes.length, 0, 'nada deve ser injetado na aba errada');
+});
+
+test('AUTOFILL_LOGIN recusa quando o tabId informado não é o da aba ativa', async () => {
+  const mock = comScripting({ abaUrl: 'https://github.com/login', abaId: 7 });
+  await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
+  await bg.rotear(contaGithub);
+  await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
+
+  const r = await bg.rotear({
+    type: 'AUTOFILL_LOGIN',
+    dominio: 'github.com',
+    tabId: 999, // não é a aba ativa (id 7)
+    manual: true,
+  });
+  assert.deepEqual(r, { ok: false, erro: 'ABA_INVALIDA' });
+  assert.equal(mock._injecoes.length, 0);
+});
+
 test('AUTOFILL_LOGIN_LOCALHOST só atende conta local sem criptografia', async () => {
-  const mock = comScripting();
+  const mock = comScripting({ abaUrl: 'http://localhost/login', abaId: 1 });
   await bg.rotear({ type: 'SET_MASTER_PASSWORD', senha: 'senha-mestra-123' });
   await bg.rotear({ ...contaGithub, dominio: 'localhost', semCriptografia: true });
   await bg.rotear({ ...contaGithub, dominio: 'localhost', email: 'cripto@x.com' });
+  // Precisa habilitar ANTES de bloquear: SET_AUTOFILL exige sessão desbloqueada,
+  // mas o fluxo localhost sem senha mestra roda com o cofre já travado.
+  await bg.rotear({ type: 'SET_AUTOFILL', config: { login: { habilitado: true } } });
   await bg.rotear({ type: 'LOCK' });
 
   const fora = await bg.rotear({

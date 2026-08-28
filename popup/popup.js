@@ -239,7 +239,7 @@ function ligarEventos() {
   // Digitar no cadastro (inclui o campo do segredo) também conta como atividade:
   // reforça o keep-alive da porta avisando o background a cada trecho digitado.
   $('form-mfa').addEventListener('input', registrarAtividadeDigitando);
-  $('form-voltar').addEventListener('click', abrirPrincipal);
+  $('form-voltar').addEventListener('click', voltarDoFormularioDeMfa);
   $('mfa-secret-toggle').addEventListener('click', () =>
     alternarVisibilidade('mfa-secret', 'mfa-secret-toggle'),
   );
@@ -432,7 +432,7 @@ async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
   const preencheuCodigo = codigo ? await preencherNaAba(config.autofill, codigo) : false;
   const preencheuLogin =
     login && config.autofill?.login?.habilitado
-      ? await pedirPreenchimentoDeLogin(login.tipo, login.dominio, false)
+      ? (await pedirPreenchimentoDeLogin(login.tipo, login.dominio, false)).preencheu
       : false;
 
   const partes = [];
@@ -451,31 +451,35 @@ async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
 
 /**
  * Pede ao background que injete e-mail e senha na aba ativa. O popup só informa
- * a aba e o domínio: a senha em claro nunca passa por aqui.
- * @returns {Promise<boolean>} true se algum campo foi preenchido.
+ * a aba e o domínio: a senha em claro nunca passa por aqui. `login.habilitado`
+ * governa tanto a ação automática quanto o clique manual — não há bypass (ao
+ * contrário da autocópia do código, preencher login escreve a senha no DOM da
+ * página, que scripts ali presentes podem ler).
+ * @returns {Promise<{preencheu: boolean, erro: string|null}>}
  */
 async function pedirPreenchimentoDeLogin(tipo, dominio, manual) {
-  if (!dominio) return false;
+  if (!dominio) return { preencheu: false, erro: null };
   try {
     const [aba] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!aba?.id) return false;
+    if (!aba?.id) return { preencheu: false, erro: null };
     const resp = await enviar({ type: tipo, dominio, tabId: aba.id, manual });
-    return resp?.ok === true && resp.preencheu === true;
+    return { preencheu: resp?.ok === true && resp.preencheu === true, erro: resp?.erro ?? null };
   } catch {
-    return false; // página restrita / sem permissão: silencioso
+    return { preencheu: false, erro: null }; // página restrita / sem permissão: silencioso
   }
 }
 
 /** Preenchimento pedido explicitamente (ícone do card ou botão do localhost). */
 async function preencherLoginManual(tipo, dominio, elAviso) {
   limpar(elAviso);
-  const preencheu = await pedirPreenchimentoDeLogin(tipo, dominio, true);
-  dizer(
-    elAviso,
-    preencheu
-      ? 'Login preenchido na página ✓'
-      : 'Não encontrei os campos de login nesta página.',
-  );
+  const { preencheu, erro } = await pedirPreenchimentoDeLogin(tipo, dominio, true);
+  if (preencheu) {
+    dizer(elAviso, 'Login preenchido na página ✓');
+  } else if (erro === 'DESABILITADO') {
+    dizer(elAviso, 'Autopreenchimento de login está desligado. Ative em Configurações.');
+  } else {
+    dizer(elAviso, 'Não encontrei os campos de login nesta página.');
+  }
 }
 
 // Função INJETADA na página (roda no contexto da aba, não no popup). Precisa ser
@@ -490,7 +494,14 @@ function preencherCamposOtp(seletor, codigo) {
   }
   if (!campos || campos.length === 0) return { ok: false, motivo: 'nao_encontrado' };
 
-  const disparar = (el) => {
+  // Mesma técnica de src/autofilllogin.js (`definir`): escreve pelo setter
+  // nativo de `value` antes de disparar input/change — formulários controlados
+  // por framework (React & cia.) ignoram uma atribuição direta ao `.value`.
+  const escrever = (el, valor) => {
+    const proto = globalThis.HTMLInputElement && globalThis.HTMLInputElement.prototype;
+    const descritor = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+    if (descritor && typeof descritor.set === 'function') descritor.set.call(el, valor);
+    else el.value = valor;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   };
@@ -498,12 +509,10 @@ function preencherCamposOtp(seletor, codigo) {
   // Vários inputs (um por dígito) vs. um único campo.
   if (campos.length > 1 && campos.length >= codigo.length) {
     for (let i = 0; i < codigo.length; i++) {
-      campos[i].value = codigo[i];
-      disparar(campos[i]);
+      escrever(campos[i], codigo[i]);
     }
   } else {
-    campos[0].value = codigo;
-    disparar(campos[0]);
+    escrever(campos[0], codigo);
   }
 
   const ultimo = campos[Math.min(campos.length, codigo.length) - 1] || campos[0];
@@ -586,6 +595,7 @@ function renderizarPrincipal() {
     obterCodigo: (id) => enviar({ type: 'GET_CODE', id }),
     aoEditar: (id) => abrirFormulario(id),
     contasPorDominio,
+    dominioAtual,
     aoPreencherLogin: (dominio) =>
       preencherLoginManual('AUTOFILL_LOGIN', dominio, $('principal-aviso')),
   });
@@ -633,6 +643,9 @@ async function abrirFormulario(id) {
   limpar($('mfa-nome-erro'));
   limpar($('mfa-secret-erro'));
   limpar($('mfa-status'));
+  // Zera o segredo ANTES de tudo: evita que o segredo de uma edição anterior
+  // fique residual no campo enquanto se espera a resposta do REVEAL_SECRET.
+  $('mfa-secret').value = '';
   $('mfa-secret').type = 'password';
   $('mfa-secret-toggle').textContent = 'Mostrar';
   $('mfa-sem-cripto').checked = false;
@@ -849,9 +862,17 @@ async function voltarDaListaDeContas() {
 }
 
 function voltarDoFormularioDeConta() {
+  $('conta-email').value = '';
+  $('conta-senha').value = '';
   if (voltarDoConta === 'contas' && dominioContas) {
     return abrirContas(dominioContas, voltarDeContas);
   }
+  return abrirPrincipal();
+}
+
+/** Sair do formulário de MFA sem salvar descarta o segredo digitado/revelado. */
+function voltarDoFormularioDeMfa() {
+  $('mfa-secret').value = '';
   return abrirPrincipal();
 }
 
@@ -871,6 +892,10 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   ]) {
     limpar($(el));
   }
+  // Zera e-mail/senha ANTES de tudo: evita que a credencial de uma conta
+  // editada antes fique residual no DOM enquanto se espera o REVEAL_CONTA.
+  $('conta-email').value = '';
+  $('conta-senha').value = '';
   $('conta-senha').type = 'password';
   $('conta-senha-toggle').textContent = 'Mostrar';
   $('conta-sem-cripto').checked = false;

@@ -194,8 +194,15 @@ async function gravarTodos(lista) {
   await area().set({ [CHAVE_MFAS]: lista });
 }
 
+// Guardião de TODA escrita de domínio (MFAs e contas): mesma normalização de
+// `normalizarDominio` (src/dominio.js) — trim + minúsculo — para que um
+// registro importado ou gravado por um caminho que não passou pela validação
+// do cadastro (ex.: IMPORT_DATA) não fique com uma grafia divergente da usada
+// nos filtros por domínio, que comparam string exata.
 function normalizarCampoDominio(valor) {
-  return valor && String(valor).trim() !== '' ? String(valor).trim() : null;
+  if (typeof valor !== 'string') return null;
+  const limpo = valor.trim().toLowerCase();
+  return limpo === '' ? null : limpo;
 }
 
 /** Retorna todos os MFAs (sem descriptografar — o segredo só vira claro na task 07). */
@@ -531,10 +538,20 @@ export async function salvarContaSemCripto({ dominio, rotulo, email, senha, prin
 }
 
 /** Aplica campos comuns (domínio/rótulo/principal) e regrava mantendo a invariante. */
-async function gravarContaAtualizada(todas, indice, atualizado, principal) {
+async function gravarContaAtualizada(todas, indice, atualizadoOriginal, principal) {
   const dominioAntigo = todas[indice].dominio;
+  const mudouDominio = dominioAntigo !== atualizadoOriginal.dominio;
+  // Ao mudar de domínio sem marcar "principal" explicitamente, o registro não
+  // pode carregar a flag `principal:true` do domínio antigo para o novo — ela
+  // desempataria por idade contra a principal já existente no destino e a
+  // desbancaria silenciosamente (ver ia/30: a invariante nunca rouba a
+  // principal de quem já tem uma).
+  const atualizado =
+    mudouDominio && principal !== true
+      ? { ...atualizadoOriginal, principal: false }
+      : atualizadoOriginal;
   let lista = todas.map((c, i) => (i === indice ? atualizado : c));
-  if (dominioAntigo !== atualizado.dominio) lista = normalizarPrincipais(lista, dominioAntigo);
+  if (mudouDominio) lista = normalizarPrincipais(lista, dominioAntigo);
   lista = normalizarPrincipais(
     lista,
     atualizado.dominio,

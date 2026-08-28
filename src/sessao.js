@@ -137,20 +137,20 @@ export async function verificarSenhaMestra(senha, { esperar = esperaReal } = {})
  * Mantém a sessão aberta com a nova chave.
  * @returns {Promise<{ok: boolean, erro?: string}>}
  */
-export async function trocarSenhaMestra(senhaAtual, senhaNova) {
+export async function trocarSenhaMestra(senhaAtual, senhaNova, { esperar = esperaReal } = {}) {
   if (typeof senhaNova !== 'string' || senhaNova.length < TAMANHO_MINIMO_SENHA) {
     return { ok: false, erro: 'SENHA_NOVA_INVALIDA' };
   }
-  const salt = await storage.obterSalt();
-  const controle = await storage.obterValorControle();
-  if (!salt || !controle) return { ok: false, erro: 'NAO_INICIALIZADO' };
-
-  // Confirma a senha atual pelo decrypt do valor de controle (timing-safe).
-  const chaveAtual = await cripto.derivarChave(senhaAtual, salt);
-  try {
-    await cripto.descriptografar(controle.ciphertext, controle.iv, chaveAtual);
-  } catch {
-    return { ok: false, erro: 'SENHA_ATUAL_INCORRETA' };
+  // Confirma a senha atual pelo MESMO núcleo do desbloqueio e da reautenticação
+  // de exportação (`conferirSenhaMestra`): timing-safe e sob o mesmo rate
+  // limiting — sem isso, esta seria uma segunda verificação de senha mestra
+  // sem a fricção que a tela de login e a exportação já aplicam.
+  const chaveAtual = await conferirSenhaMestra(senhaAtual, esperar);
+  if (!chaveAtual) {
+    const inicializado = await storage.estaInicializado();
+    return inicializado
+      ? { ok: false, erro: 'SENHA_ATUAL_INCORRETA' }
+      : { ok: false, erro: 'NAO_INICIALIZADO' };
   }
 
   const novoSalt = cripto.gerarBytesAleatorios(cripto.TAMANHO_SALT);

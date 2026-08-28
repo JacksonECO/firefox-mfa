@@ -27,7 +27,9 @@ principal, que é a única que o autopreenchimento usa.
   storage, não na UI).
 - Tela dedicada "Contas de \<site\>" (lista com switch de principal, mostrar/ocultar e-mail,
   editar, excluir) e formulário próprio de criar/editar.
-- Ícone no card do MFA quando o site tem conta salva; clicar preenche o login na página.
+- Ícone no card do MFA quando o site tem conta salva; clicar preenche o login na página —
+  respeitando o mesmo interruptor `login.habilitado` do preenchimento automático (ver
+  decisão técnica abaixo: não há bypass "manual" para essa opção).
 - Entradas: "+ E-mail e senha" na tela principal (cobre sites sem MFA nenhum) e o bloco
   "E-mail e senha deste site" dentro do formulário de MFA.
 - Autopreenchimento de login opt-in: seletores padrão + overrides por domínio, sem enviar o
@@ -51,10 +53,23 @@ principal, que é a única que o autopreenchimento usa.
   exceção deliberada que o `REVEAL_SECRET` já tinha.
 - **O e-mail também é cifrado.** É dado pessoal e liga a pessoa ao serviço; o domínio fica em
   claro porque é a chave de busca (como nos MFAs).
+- **`login.habilitado` governa TANTO o preenchimento automático ao abrir QUANTO o clique
+  manual no ícone do card — sem bypass.** Diferente da autocópia do código (que só copia
+  para a área de transferência, nunca toca a página), preencher login **escreve a senha no
+  DOM da página**: qualquer script ali presente pode lê-la. Por isso, com a opção desligada,
+  nenhum caminho preenche — nem automático, nem por clique explícito. O usuário reativa a
+  opção em Configurações para voltar a usar o ícone.
 - **A injeção do login roda no background, não no popup.** No autofill de MFA (ia/18) o popup
   injeta, mas ali trafega só o código de 6 dígitos. Aqui trafegaria a senha do site: então o
   popup manda `AUTOFILL_LOGIN { dominio, tabId }` e quem chama `scripting.executeScript` é o
   background, dono da chave. A senha nunca entra no processo do popup.
+- **O background confere que a aba de destino é realmente do domínio pedido**, antes de
+  injetar (`browser.tabs.query` + `extrairDominioDaAba(aba) === conta.dominio`). Sem essa
+  checagem, o popup escolheria sozinho para onde a senha vai — e ele às vezes mostra cards de
+  domínios diferentes do da aba atual (modo "ver todos", quando o site aberto não tem MFA
+  cadastrado). O popup nunca é confiável para decidir isso: é a maior superfície de XSS do
+  produto (CLAUDE.md). A UI (`popup/cards.js`) também só exibe o ícone no card do domínio
+  atual — defesa em profundidade, não a única barreira.
 - **Invariante de conta principal no storage** (`normalizarPrincipais`): a primeira conta de
   um domínio nasce principal; marcar outra desmarca a anterior; excluir a principal promove a
   mais antiga restante. Fica fora da UI de propósito — importar um backup também precisa dela.
@@ -99,8 +114,9 @@ principal, que é a única que o autopreenchimento usa.
   (criar/trocar/excluir/mudar de domínio), localhost sem cripto e conversão.
 - `contas-background.test.js`: `LIST_CONTAS` nunca devolve senha; tudo exige sessão; validação
   no background; `semCriptografia` só em localhost; recifragem na troca de senha.
-- `autofill-login.test.js`: normalização retrocompatível da config, resolução de seletores e a
-  função injetada exercitada sobre um `document` falso (invisíveis, fallback, Enter).
+- `autofill-login.test.js`: normalização retrocompatível da config, resolução de seletores, a
+  função injetada exercitada sobre um `document` falso (invisíveis, fallback, Enter), e a
+  recusa a injetar quando a aba de destino não é do domínio da conta.
 - `popup-estrutura.test.js`: todo id usado no JS existe no HTML; o template da lista não tem
   campo de senha; `REVEAL_CONTA` é enviado de um ponto só.
 
@@ -113,3 +129,7 @@ principal, que é a única que o autopreenchimento usa.
   **não enviar** o formulário por padrão.
 - Conta de localhost sem criptografia fica em claro no storage — é o mesmo trade-off explícito
   da task 26, restrito a localhost e validado no background.
+- Injetar a credencial de um domínio na aba de OUTRO domínio (ex.: o modo "ver todos" mostrando
+  cards de sites diferentes do aberto) foi identificado em revisão e corrigido: o background
+  agora confere a aba de destino contra o domínio da conta antes de injetar, com teste de
+  regressão em `autofill-login.test.js`.

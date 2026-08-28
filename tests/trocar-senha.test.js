@@ -96,3 +96,30 @@ test('CHANGE_MASTER_PASSWORD exige sessão desbloqueada', async () => {
   });
   assert.equal(r.erro, 'SESSAO_BLOQUEADA');
 });
+
+test('senha atual errada na troca conta no MESMO rate limiting do desbloqueio', async () => {
+  // Regressão: `trocarSenhaMestra` reimplementava a verificação por conta
+  // própria, sem tocar no contador de tentativas nem no atraso progressivo.
+  // Agora ela passa pelo mesmo núcleo do desbloqueio (`conferirSenhaMestra`).
+  await bg.rotear({
+    type: 'CHANGE_MASTER_PASSWORD',
+    senhaAtual: 'senha-errada',
+    senhaNova: 'senha-nova-2',
+  });
+  assert.equal(globalThis.browser._dados.get('mfaUnlockAttempts'), 1);
+
+  await bg.rotear({
+    type: 'CHANGE_MASTER_PASSWORD',
+    senhaAtual: 'senha-errada',
+    senhaNova: 'senha-nova-2',
+  });
+  assert.equal(globalThis.browser._dados.get('mfaUnlockAttempts'), 2);
+
+  const ok = await bg.rotear({
+    type: 'CHANGE_MASTER_PASSWORD',
+    senhaAtual: 'senha-antiga-1',
+    senhaNova: 'senha-nova-2',
+  });
+  assert.equal(ok.ok, true);
+  assert.equal(globalThis.browser._dados.get('mfaUnlockAttempts'), 0, 'acerto zera a fricção');
+});
