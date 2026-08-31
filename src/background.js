@@ -25,6 +25,15 @@ import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
 import { preencherLogin, resolverSeletorLogin } from './autofilllogin.js';
 import { normalizarTimeout, TIMEOUT_PADRAO_MS } from './sessaoconfig.js';
 
+// Janela de reabertura rápida (task 32): não é config do usuário, é um
+// comportamento fixo de UX. Se `fecharAoPreencher` fechar o popup sozinho e o
+// usuário clicar no ícone de novo em menos de 3s, entende-se que o clique
+// rápido é intencional (ver a tela), então essa reabertura fica visível mesmo
+// com a config ligada. Estado só em memória — não é segredo, reinício do
+// background reseta e não há problema nisso.
+const JANELA_REABERTURA_RAPIDA_MS = 3000;
+let ultimoFechamentoAutomaticoEm = null;
+
 /** Coleta as configurações atuais (não sensíveis) para exportar. */
 async function coletarConfiguracoes() {
   return {
@@ -744,6 +753,21 @@ export async function rotear(mensagem) {
       );
       const autocopiar = await storage.obterAutocopiar();
       return { ok: true, autocopiar, autofill };
+    }
+
+    case 'PODE_FECHAR_AUTOMATICO': {
+      // Sem exigir sessão: é só um cronômetro de UX (task 32), não toca em
+      // segredo, chave nem storage — vale também no fluxo localhost.
+      const agora = Date.now();
+      const reabriuRapido =
+        ultimoFechamentoAutomaticoEm !== null &&
+        agora - ultimoFechamentoAutomaticoEm < JANELA_REABERTURA_RAPIDA_MS;
+      if (reabriuRapido) {
+        ultimoFechamentoAutomaticoEm = null; // consome a janela, não empilha
+        return { ok: true, permitir: false };
+      }
+      ultimoFechamentoAutomaticoEm = agora;
+      return { ok: true, permitir: true };
     }
 
     case 'SET_AUTOCOPY': {

@@ -446,7 +446,13 @@ async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
   }
 
   // Fecha o popup sozinho quando o autopreenchimento do código der certo (opt-in).
-  if (preencheuCodigo && config.autofill?.fecharAoPreencher) window.close();
+  // Exceção: um clique de reabertura em menos de 3s do último fechamento automático
+  // (task 32) é lido como "eu quero ver a tela", então desta vez o popup fica
+  // aberto mesmo com a config ligada — vale para qualquer domínio/config atual.
+  if (preencheuCodigo && config.autofill?.fecharAoPreencher) {
+    const resp = await enviar({ type: 'PODE_FECHAR_AUTOMATICO' }).catch(() => null);
+    if (resp?.permitir !== false) window.close();
+  }
 }
 
 /**
