@@ -17,20 +17,14 @@ const dizer = (el, texto) => {
 // atributo de dataset.
 let caixasDominio = [];
 
-// Mantém a sessão viva enquanto esta aba estiver aberta — o mesmo mecanismo do
-// popup (ver popup.js): uma porta de longa duração suspende o timer de
-// inatividade do background até a aba fechar. Sem isto, a janela de 2 minutos
-// corre desde que o POPUP fechou (não desde que esta aba abriu), e o
-// formulário de exportação — que agora também pede a senha mestra — corre o
-// risco real de expirar no meio do preenchimento.
-let portaKeepalive = null;
-function manterSessaoViva() {
-  try {
-    portaKeepalive = browser.runtime.connect({ name: 'popup-keepalive' });
-  } catch {
-    portaKeepalive = null; // sem porta: volta ao comportamento por inatividade
-  }
-}
+// Diferente do popup.js, esta aba NÃO abre a porta `popup-keepalive`: essa
+// porta suspende por completo a expiração por inatividade (task 21), o que faz
+// sentido para o popup (destruído ao perder foco, janela de suspensão curta),
+// mas não para uma aba comum, que o usuário pode deixar aberta em segundo
+// plano por horas — a sessão nunca expiraria enquanto ela existisse (achado de
+// segurança da rodada 1 do code review). Em vez disso, cada tecla digitada nos
+// formulários já conta como atividade via PING abaixo, o que é suficiente para
+// não expirar no meio do preenchimento da exportação sem desligar o timeout.
 
 // Mesmo throttle de popup.js: conta como atividade sem virar 1 mensagem/tecla.
 let ultimoPingAtividade = 0;
@@ -42,7 +36,6 @@ function registrarAtividadeDigitando() {
 }
 
 async function iniciar() {
-  manterSessaoViva();
   $('form-exportar').addEventListener('submit', aoExportar);
   $('form-exportar').addEventListener('input', registrarAtividadeDigitando);
   $('form-importar').addEventListener('submit', aoImportar);
@@ -139,8 +132,15 @@ async function aoExportar(evento) {
     return;
   }
 
-  const dominios = caixasDominio.filter(({ caixa }) => caixa.checked).map(({ dominio }) => dominio);
-  if (caixasDominio.length > 0 && dominios.length === 0 && (incluirMfas || incluirContas)) {
+  // Cofre vazio (nada para marcar) não é o mesmo que o usuário ter desmarcado
+  // tudo: `null` diz ao background "sem filtro de site" (não há nenhum para
+  // filtrar), enquanto `[]` é uma seleção explicitamente vazia — só a segunda
+  // deve travar a exportação de MFAs/contas.
+  const dominios =
+    caixasDominio.length === 0
+      ? null
+      : caixasDominio.filter(({ caixa }) => caixa.checked).map(({ dominio }) => dominio);
+  if (Array.isArray(dominios) && dominios.length === 0 && (incluirMfas || incluirContas)) {
     dizer(erro, 'Selecione ao menos um site.');
     return;
   }
@@ -167,6 +167,7 @@ async function aoExportar(evento) {
 function mensagemDeErroDeExportacao(codigo) {
   if (codigo === 'SESSAO_BLOQUEADA') return 'Sessão expirada.';
   if (codigo === 'SENHA_MESTRA_INCORRETA') return 'Senha mestra incorreta.';
+  if (codigo === 'NENHUM_SITE_SELECIONADO') return 'Selecione ao menos um site.';
   return 'Falha ao exportar.';
 }
 

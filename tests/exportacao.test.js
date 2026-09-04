@@ -238,6 +238,16 @@ test('EXPORT_DATA com dominios:null (todos) continua funcionando normalmente', a
   assert.equal(r.ok, true);
 });
 
+// Regressão do code review (rodada 1): cofre vazio não é o mesmo que o
+// usuário ter desmarcado tudo. Sem nenhum domínio para marcar, o popup manda
+// `dominios: null` (não `[]`) — e isso deve exportar normalmente (vazio), em
+// vez de cair no NENHUM_SITE_SELECIONADO que é para seleção explícita.
+test('EXPORT_DATA com cofre vazio e dominios:null exporta vazio, sem exigir seleção', async () => {
+  const r = await exportar({ filtro: { dominios: null, incluirMfas: true, incluirContas: true } });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.exportados, { mfas: 0, contas: 0 });
+});
+
 test('EXPORT_DATA devolve um código estável, nunca a mensagem interna da exceção', async () => {
   await bg.rotear({ type: 'SAVE_MFA', nome: 'GitHub', dominio: 'github.com', secret: SEGREDO });
   // Corrompe o IV do registro salvo: força `lerSegredo`/decrypt a falhar,

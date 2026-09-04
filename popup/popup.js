@@ -432,7 +432,7 @@ async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
   const preencheuCodigo = codigo ? await preencherNaAba(config.autofill, codigo) : false;
   const preencheuLogin =
     login && config.autofill?.login?.habilitado
-      ? (await pedirPreenchimentoDeLogin(login.tipo, login.dominio, false)).preencheu
+      ? (await pedirPreenchimentoDeLogin(login.tipo, login.dominio)).preencheu
       : false;
 
   const partes = [];
@@ -460,15 +460,16 @@ async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
  * a aba e o domínio: a senha em claro nunca passa por aqui. `login.habilitado`
  * governa tanto a ação automática quanto o clique manual — não há bypass (ao
  * contrário da autocópia do código, preencher login escreve a senha no DOM da
- * página, que scripts ali presentes podem ler).
+ * página, que scripts ali presentes podem ler). Por isso não há um parâmetro
+ * "manual" aqui: o background trataria os dois casos exatamente igual.
  * @returns {Promise<{preencheu: boolean, erro: string|null}>}
  */
-async function pedirPreenchimentoDeLogin(tipo, dominio, manual) {
+async function pedirPreenchimentoDeLogin(tipo, dominio) {
   if (!dominio) return { preencheu: false, erro: null };
   try {
     const [aba] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!aba?.id) return { preencheu: false, erro: null };
-    const resp = await enviar({ type: tipo, dominio, tabId: aba.id, manual });
+    const resp = await enviar({ type: tipo, dominio, tabId: aba.id });
     return { preencheu: resp?.ok === true && resp.preencheu === true, erro: resp?.erro ?? null };
   } catch {
     return { preencheu: false, erro: null }; // página restrita / sem permissão: silencioso
@@ -478,7 +479,7 @@ async function pedirPreenchimentoDeLogin(tipo, dominio, manual) {
 /** Preenchimento pedido explicitamente (ícone do card ou botão do localhost). */
 async function preencherLoginManual(tipo, dominio, elAviso) {
   limpar(elAviso);
-  const { preencheu, erro } = await pedirPreenchimentoDeLogin(tipo, dominio, true);
+  const { preencheu, erro } = await pedirPreenchimentoDeLogin(tipo, dominio);
   if (preencheu) {
     dizer(elAviso, 'Login preenchido na página ✓');
   } else if (erro === 'DESABILITADO') {
@@ -818,16 +819,23 @@ function criarLinhaConta(template, conta) {
 
   const emailEl = el.querySelector('.conta__email');
   const botaoMostrar = el.querySelector('.conta__mostrar');
-  let revelado = false;
-  const pintar = () => {
-    emailEl.textContent = revelado ? conta.email : mascararEmail(conta.email);
-    botaoMostrar.textContent = revelado ? 'Ocultar' : 'Mostrar';
-  };
-  pintar();
-  botaoMostrar.addEventListener('click', () => {
-    revelado = !revelado;
+  if (conta.falhaLeitura) {
+    // Registro corrompido (ex.: IV/ciphertext incompatível): não há e-mail
+    // para mostrar/ocultar, então avisa em vez de fingir uma máscara vazia.
+    emailEl.textContent = 'não foi possível ler esta conta';
+    botaoMostrar.hidden = true;
+  } else {
+    let revelado = false;
+    const pintar = () => {
+      emailEl.textContent = revelado ? conta.email : mascararEmail(conta.email);
+      botaoMostrar.textContent = revelado ? 'Ocultar' : 'Mostrar';
+    };
     pintar();
-  });
+    botaoMostrar.addEventListener('click', () => {
+      revelado = !revelado;
+      pintar();
+    });
+  }
 
   const rotuloEl = el.querySelector('.conta__rotulo');
   const legenda = [conta.rotulo, conta.semCriptografia ? 'sem criptografia' : null]
@@ -906,6 +914,8 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   $('conta-senha-toggle').textContent = 'Mostrar';
   $('conta-sem-cripto').checked = false;
   $('conta-sem-cripto').disabled = false;
+  $('conta-principal').disabled = false;
+  $('conta-principal-ajuda').hidden = true;
   mostrarVista('conta-form');
 
   if (id === null) {
@@ -931,6 +941,10 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   $('conta-dominio').value = conta?.dominio ?? dominio ?? '';
   $('conta-rotulo').value = conta?.rotulo ?? '';
   $('conta-principal').checked = conta?.principal === true;
+  // Desmarcar a principal não tem efeito (a invariante sempre reelege alguém
+  // do domínio) — desabilita e explica em vez de deixar a ação silenciosa.
+  $('conta-principal').disabled = conta?.principal === true;
+  $('conta-principal-ajuda').hidden = conta?.principal !== true;
   // O modo de criptografia é definido na criação e preservado: só informativo.
   $('conta-sem-cripto').checked = conta?.semCriptografia === true;
   $('conta-sem-cripto').disabled = true;
