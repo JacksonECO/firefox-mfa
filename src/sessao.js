@@ -27,10 +27,14 @@ let ultimaAtividade = 0;
 
 // Enquanto o popup está aberto, a sessão NÃO expira por inatividade — o usuário
 // pode demorar preenchendo um cadastro sem mandar mensagens ao background. O timer
-// de 2 min só (re)começa quando o popup fecha. Controlado por uma porta de longa
-// duração (runtime.connect) que o popup abre ao carregar e que se desconecta ao
-// fechar (ver marcarPopupAberto / marcarPopupFechado).
-let popupAberto = false;
+// de 2 min só (re)começa quando NENHUMA porta estiver mais conectada. Controlado
+// por uma porta de longa duração (runtime.connect) que o popup abre ao carregar e
+// que se desconecta ao fechar (ver marcarPopupAberto / marcarPopupFechado).
+// Contador, não booleano: se mais de um cliente conectar (hoje só o popup conecta,
+// mas já existiu uma segunda porta na aba de backup — removida em code review por
+// outro motivo), uma desconexão não pode derrubar o keep-alive de quem continua
+// aberto.
+let portasAbertas = 0;
 
 export { NOME_ALARME };
 
@@ -220,7 +224,7 @@ export function ativarSessao(chave) {
  */
 export function registrarAtividade() {
   ultimaAtividade = Date.now();
-  if (popupAberto) cancelarExpiracao();
+  if (portasAbertas > 0) cancelarExpiracao();
   else agendarExpiracao();
   iniciarKeepalive(); // garante o heartbeat ativo p/ a janela atual (idempotente)
 }
@@ -231,7 +235,7 @@ export function registrarAtividade() {
  */
 export function estaDesbloqueado() {
   if (!chaveEmMemoria) return false;
-  if (!popupAberto && Date.now() - ultimaAtividade > timeoutMs) {
+  if (portasAbertas === 0 && Date.now() - ultimaAtividade > timeoutMs) {
     bloquear();
     return false;
   }
@@ -243,18 +247,19 @@ export function estaDesbloqueado() {
  * viva, suspendendo a expiração por inatividade enquanto estiver aberto.
  */
 export function marcarPopupAberto() {
-  popupAberto = true;
+  portasAbertas += 1;
   ultimaAtividade = Date.now();
   cancelarExpiracao();
 }
 
 /**
- * Sinaliza que o popup fechou (porta desconectada): reinicia a janela de
- * inatividade do zero, de forma que o tempo só passa a contar após o fechamento.
+ * Sinaliza que uma porta fechou (desconectada). Só reinicia a janela de
+ * inatividade quando a ÚLTIMA porta desconecta — com outra ainda aberta
+ * (contador > 0), a sessão continua sem expirar por causa dela.
  */
 export function marcarPopupFechado() {
-  popupAberto = false;
-  if (chaveEmMemoria) registrarAtividade();
+  portasAbertas = Math.max(0, portasAbertas - 1);
+  if (portasAbertas === 0 && chaveEmMemoria) registrarAtividade();
 }
 
 /**
@@ -310,7 +315,7 @@ function iniciarKeepalive() {
       pararKeepalive(); // janela esgotada (já bloqueou) ou sessão encerrada
       return;
     }
-    if (popupAberto) return; // popup aberto: a porta já segura o worker
+    if (portasAbertas > 0) return; // alguma porta aberta: ela já segura o worker
     const restante = timeoutMs - (Date.now() - ultimaAtividade);
     if (restante <= MARGEM_SUSPENSAO_MS) {
       // Faltam <= 30s: para de bater e deixa o Firefox suspender o worker ~no fim

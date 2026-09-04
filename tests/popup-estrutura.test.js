@@ -47,6 +47,9 @@ test('o switch de conta principal é um rádio (exatamente uma por domínio)', (
   assert.match(template, /class="switch__input"[^>]*type="radio"/);
   assert.match(template, /class="conta__email"/);
   assert.match(template, /class="conta__editar"/);
+  // `.conta__mostrar` virou load-bearing na correção do falhaLeitura (criarLinhaConta
+  // esconde o botão via essa classe) — um rename só quebraria em runtime sem isto.
+  assert.match(template, /class="conta__mostrar[ "]/);
 });
 
 test('o card tem o ícone de conta salva, começando escondido', () => {

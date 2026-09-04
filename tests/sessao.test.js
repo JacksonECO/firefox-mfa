@@ -110,6 +110,28 @@ test('ao fechar o popup a janela de inatividade recomeça do zero', () => {
   }
 });
 
+test('duas portas conectadas: fechar uma não derruba o keep-alive da outra (regressão de code review)', () => {
+  mock.timers.enable({ apis: ['Date'] });
+  try {
+    sessao.ativarSessao({});
+    sessao.marcarPopupAberto(); // porta A conecta
+    sessao.marcarPopupAberto(); // porta B conecta (ex.: duas janelas/abas)
+    mock.timers.tick(10 * 60_000); // muito tempo com as duas abertas
+
+    sessao.marcarPopupFechado(); // A desconecta — B continua aberta
+    mock.timers.tick(10 * 60_000); // mais 10 min: se fosse booleano, já teria expirado
+    assert.equal(sessao.estaDesbloqueado(), true, 'não expira enquanto B ainda está aberta');
+
+    sessao.marcarPopupFechado(); // B desconecta agora — só aqui o relógio reinicia
+    mock.timers.tick(119_000);
+    assert.equal(sessao.estaDesbloqueado(), true, 'ainda dentro dos 2 min após a ÚLTIMA porta fechar');
+    mock.timers.tick(2_000);
+    assert.equal(sessao.estaDesbloqueado(), false, 'expira 2 min depois de fechar a última porta');
+  } finally {
+    mock.timers.reset();
+  }
+});
+
 test('keep-alive: heartbeat para quando faltam <=30s (não mantém o worker além do timeout)', () => {
   mock.timers.enable({ apis: ['setInterval', 'Date'] });
   const heartbeat = mock.fn(async () => ({ os: 'linux' }));

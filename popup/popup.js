@@ -56,6 +56,18 @@ let contaEdicaoId = null; // null = criar conta; id = editar
 let voltarDeContas = 'principal'; // para onde a LISTA de contas volta: principal|formulario
 let voltarDoConta = 'contas'; // para onde o FORMULÁRIO de conta volta: contas|principal
 let alvoExclusao = null; // { tipo: 'mfa' | 'conta', id } — diálogo compartilhado
+// Domínio/estado "principal" com que o formulário de conta foi aberto — usados
+// para só travar o checkbox #conta-principal enquanto o domínio não muda (ver
+// atualizarPrincipalConta): trocar de site é uma escolha real sobre roubar ou
+// não a principal do destino, diferente de desmarcar no MESMO domínio.
+let dominioOriginalConta = null;
+let contaEraPrincipal = false;
+// Tokens de geração: cada abertura de formulário incrementa o seu: se o
+// usuário sair ou abrir outro registro antes do REVEAL_* responder, a resposta
+// tardia se descobre obsoleta e é descartada em vez de repopular um formulário
+// que já é de outra coisa (ou já saiu de cena) — achado de code review.
+let geracaoFormMfa = 0;
+let geracaoFormConta = 0;
 let configAutofillCache = null; // config completa, p/ salvar um bloco sem perder o outro
 let rascunhoMfa = null; // formulário de MFA guardado ao sair para as contas
 
@@ -65,6 +77,16 @@ function mostrarVista(nome) {
   // O ticker é usado pela tela principal e pela tela localhost (ambas têm cards).
   if (nome !== 'principal' && nome !== 'localhost') pararTicker();
   fecharDialogoExclusao(); // o diálogo é transitório: nunca persiste entre telas
+  // Sair de um formulário com segredo/credencial revelada por QUALQUER caminho
+  // (voltar, excluir, erro ao salvar, ...) descarta o que ficou no DOM — antes só
+  // o botão "Voltar" fazia essa limpeza, deixando resíduo nos outros caminhos de
+  // saída (achado de code review).
+  const anterior = VIEWS.find((id) => !$(id).hidden);
+  if (anterior === 'view-formulario' && nome !== 'formulario') $('mfa-secret').value = '';
+  if (anterior === 'view-conta-form' && nome !== 'conta-form') {
+    $('conta-email').value = '';
+    $('conta-senha').value = '';
+  }
   for (const id of VIEWS) $(id).hidden = id !== `view-${nome}`;
   // Foca o campo inicial da tela (ex.: senha mestra), se a tela marcar um. Como as
   // telas começam ocultas, o atributo HTML `autofocus` não dispara — focamos aqui.
@@ -227,7 +249,10 @@ function ligarEventos() {
   $('conta-senha-toggle').addEventListener('click', () =>
     alternarVisibilidade('conta-senha', 'conta-senha-toggle'),
   );
-  $('conta-dominio').addEventListener('input', atualizarOpcaoSemCriptoConta);
+  $('conta-dominio').addEventListener('input', () => {
+    atualizarOpcaoSemCriptoConta();
+    atualizarPrincipalConta();
+  });
   $('conta-excluir').addEventListener('click', () =>
     abrirDialogoExclusao({ tipo: 'conta', id: contaEdicaoId }),
   );
@@ -647,6 +672,7 @@ async function obterDominioAtual() {
 
 async function abrirFormulario(id) {
   edicaoId = id;
+  const geracao = ++geracaoFormMfa;
   limpar($('mfa-nome-erro'));
   limpar($('mfa-secret-erro'));
   limpar($('mfa-status'));
@@ -684,6 +710,7 @@ async function abrirFormulario(id) {
   atualizarBlocoContas();
   // Pré-preenche o segredo (exceção REVEAL_SECRET da ia/02; em claro p/ localhost).
   const resp = await enviar({ type: 'REVEAL_SECRET', id });
+  if (geracao !== geracaoFormMfa) return; // outra abertura assumiu; descarta a resposta
   $('mfa-secret').value = resp?.ok ? resp.secret : '';
 }
 
@@ -892,6 +919,7 @@ function voltarDoFormularioDeMfa() {
 
 async function abrirFormularioConta(id, dominio, origem = 'contas') {
   contaEdicaoId = id;
+  const geracao = ++geracaoFormConta;
   voltarDoConta = origem;
   // Entrando pela tela principal, a lista que vem depois de salvar também volta
   // para lá (e não para um formulário de MFA de uma navegação anterior).
@@ -914,8 +942,9 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   $('conta-senha-toggle').textContent = 'Mostrar';
   $('conta-sem-cripto').checked = false;
   $('conta-sem-cripto').disabled = false;
-  $('conta-principal').disabled = false;
-  $('conta-principal-ajuda').hidden = true;
+  dominioOriginalConta = null;
+  contaEraPrincipal = false;
+  atualizarPrincipalConta();
   mostrarVista('conta-form');
 
   if (id === null) {
@@ -941,10 +970,12 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   $('conta-dominio').value = conta?.dominio ?? dominio ?? '';
   $('conta-rotulo').value = conta?.rotulo ?? '';
   $('conta-principal').checked = conta?.principal === true;
-  // Desmarcar a principal não tem efeito (a invariante sempre reelege alguém
-  // do domínio) — desabilita e explica em vez de deixar a ação silenciosa.
-  $('conta-principal').disabled = conta?.principal === true;
-  $('conta-principal-ajuda').hidden = conta?.principal !== true;
+  // Desmarcar a principal não tem efeito NO MESMO domínio (a invariante sempre
+  // reelege alguém) — mas ao trocar de domínio, é uma escolha real (roubar ou
+  // não a principal do destino), então só trava enquanto o domínio não muda.
+  dominioOriginalConta = conta?.dominio ?? null;
+  contaEraPrincipal = conta?.principal === true;
+  atualizarPrincipalConta();
   // O modo de criptografia é definido na criação e preservado: só informativo.
   $('conta-sem-cripto').checked = conta?.semCriptografia === true;
   $('conta-sem-cripto').disabled = true;
@@ -952,8 +983,29 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   // Exceção REVEAL_CONTA (ia/30): só o fluxo de edição recebe e-mail e senha
   // em claro, para popular o formulário.
   const resp = await enviar({ type: 'REVEAL_CONTA', id });
+  if (geracao !== geracaoFormConta) return; // outra abertura assumiu; descarta a resposta
   $('conta-email').value = resp?.ok ? resp.email : '';
   $('conta-senha').value = resp?.ok ? resp.senha : '';
+}
+
+// Trava #conta-principal só enquanto a conta editada já é a principal E o
+// domínio no formulário ainda é o mesmo em que ela foi aberta — desmarcar não
+// tem efeito nesse caso (a invariante sempre reelege alguém do domínio), mas
+// ao trocar de site é uma escolha real: sem isso, mover a conta sempre rouba
+// a principal do domínio de destino em silêncio (regressão pega em code
+// review — ver ia/30, invariante de 1 principal por domínio).
+function atualizarPrincipalConta() {
+  const mesmoDominio =
+    dominioOriginalConta !== null &&
+    normalizarDominio($('conta-dominio').value) === dominioOriginalConta;
+  const trava = contaEraPrincipal && mesmoDominio;
+  // Ao travar de novo (usuário mudou o domínio e voltou ao original), força
+  // marcado: sem isso, um desmarque feito enquanto destravado (noutro domínio)
+  // sobreviveria e mandaria `principal: false` no MESMO domínio — exatamente
+  // o caso silenciosamente ignorado que a trava existe para evitar.
+  if (trava) $('conta-principal').checked = true;
+  $('conta-principal').disabled = trava;
+  $('conta-principal-ajuda').hidden = !trava;
 }
 
 // Mostra a opção "sem criptografia" apenas quando o domínio é localhost (task 26).
@@ -995,9 +1047,8 @@ async function aoSalvarConta(evento) {
     principal: $('conta-principal').checked,
     semCriptografia,
   });
-  $('conta-senha').value = ''; // descarta a senha da UI
-
   if (resp?.ok) {
+    $('conta-senha').value = ''; // descarta a senha da UI só quando ela já foi salva
     await atualizarResumoContas();
     await abrirContas(validacao.normalizado.dominio, voltarDeContas);
   } else if (resp?.erros) {

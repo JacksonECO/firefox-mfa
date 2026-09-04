@@ -16,6 +16,9 @@ const dizer = (el, texto) => {
 // par {caixa, dominio} porque `null` (registro sem site) não sobrevive a um
 // atributo de dataset.
 let caixasDominio = [];
+// true só quando o EXPORT_RESUMO falhou (comunicação/sessão) — diferente de um
+// cofre genuinamente vazio, não deve liberar exportar MFAs/contas sem seleção.
+let resumoIndisponivel = false;
 
 // Diferente do popup.js, esta aba NÃO abre a porta `popup-keepalive`: essa
 // porta suspende por completo a expiração por inatividade (task 21), o que faz
@@ -55,7 +58,8 @@ async function iniciar() {
 
 async function carregarDominios() {
   const resp = await enviar({ type: 'EXPORT_RESUMO' }).catch(() => null);
-  const dominios = resp?.ok ? resp.dominios : [];
+  resumoIndisponivel = resp?.ok !== true;
+  const dominios = resumoIndisponivel ? [] : resp.dominios;
   caixasDominio = [];
   const container = $('exportar-dominios');
   container.replaceChildren();
@@ -63,7 +67,12 @@ async function carregarDominios() {
   if (dominios.length === 0) {
     const vazio = document.createElement('p');
     vazio.className = 'config__ajuda';
-    vazio.textContent = 'Nada cadastrado ainda.';
+    // Distingue "não consegui carregar" de "não há nada": só o segundo caso
+    // deve deixar exportar livremente sem nenhum site marcado (achado de code
+    // review — antes os dois casos exportavam o cofre inteiro em silêncio).
+    vazio.textContent = resumoIndisponivel
+      ? 'Não foi possível carregar os sites. Recarregue esta página.'
+      : 'Nada cadastrado ainda.';
     container.append(vazio);
     return;
   }
@@ -132,6 +141,11 @@ async function aoExportar(evento) {
     return;
   }
 
+  if (resumoIndisponivel) {
+    dizer(erro, 'Não foi possível carregar os sites. Recarregue esta página e tente de novo.');
+    return;
+  }
+
   // Cofre vazio (nada para marcar) não é o mesmo que o usuário ter desmarcado
   // tudo: `null` diz ao background "sem filtro de site" (não há nenhum para
   // filtrar), enquanto `[]` é uma seleção explicitamente vazia — só a segunda
@@ -155,6 +169,7 @@ async function aoExportar(evento) {
     // Em caso de erro (senha mestra incorreta, sessão expirada), preserva o
     // que foi digitado — não faz sentido obrigar a redigitar as duas senhas.
     dizer(erro, mensagemDeErroDeExportacao(resp?.erro));
+    if (resp?.erro === 'SESSAO_BLOQUEADA') mostrarBloqueado();
     return;
   }
   $('exportar-mestra').value = '';
@@ -165,7 +180,7 @@ async function aoExportar(evento) {
 }
 
 function mensagemDeErroDeExportacao(codigo) {
-  if (codigo === 'SESSAO_BLOQUEADA') return 'Sessão expirada.';
+  if (codigo === 'SESSAO_BLOQUEADA') return 'Sessão expirada. Desbloqueie pela extensão.';
   if (codigo === 'SENHA_MESTRA_INCORRETA') return 'Senha mestra incorreta.';
   if (codigo === 'NENHUM_SITE_SELECIONADO') return 'Selecione ao menos um site.';
   return 'Falha ao exportar.';
@@ -223,9 +238,19 @@ async function aoImportar(evento) {
     await carregarDominios();
   } else if (resp?.erro === 'SESSAO_BLOQUEADA') {
     dizer(erro, 'Sessão expirada. Desbloqueie pela extensão.');
+    mostrarBloqueado();
   } else {
     dizer(erro, 'Senha incorreta ou arquivo inválido.');
   }
+}
+
+// A sessão pode expirar com esta aba aberta (ela não mantém mais a sessão viva
+// sozinha — ver o comentário no topo do arquivo). Quando isso acontece no meio
+// de uma exportação/importação, mostra o mesmo aviso completo da carga inicial
+// em vez de só a frase de erro no formulário.
+function mostrarBloqueado() {
+  $('bloqueado-aviso').hidden = false;
+  $('backup-conteudo').hidden = true;
 }
 
 iniciar();
