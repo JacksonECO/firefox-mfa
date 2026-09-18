@@ -134,6 +134,49 @@ body.pagina {
   flex: 1;
 }
 
+/* Variante com o botão de mostrar/ocultar como ícone dentro do próprio campo,
+   em vez de um link de texto ao lado (ver .campo-olho). */
+.field__secret--olho {
+  position: relative;
+  display: block;
+}
+
+.field__secret--olho .field__input {
+  padding-right: calc(var(--space-3) + 28px);
+}
+
+.campo-olho {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--color-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.campo-olho:hover {
+  color: var(--color-text);
+}
+
+.campo-olho:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.campo-olho .icone {
+  width: 18px;
+  height: 18px;
+}
+
 .field__erro {
   margin: 0 0 var(--space-2);
   min-height: 1em;

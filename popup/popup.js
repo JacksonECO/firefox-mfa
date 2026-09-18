@@ -247,7 +247,7 @@ function ligarEventos() {
   $('form-conta').addEventListener('input', registrarAtividadeDigitando);
   $('conta-form-voltar').addEventListener('click', voltarDoFormularioDeConta);
   $('conta-senha-toggle').addEventListener('click', () =>
-    alternarVisibilidade('conta-senha', 'conta-senha-toggle'),
+    alternarVisibilidadeIcone('conta-senha', 'conta-senha-toggle'),
   );
   $('conta-dominio').addEventListener('input', () => {
     atualizarOpcaoSemCriptoConta();
@@ -281,6 +281,18 @@ function alternarVisibilidade(idInput, idBotao) {
   const revelar = input.type === 'password';
   input.type = revelar ? 'text' : 'password';
   botao.textContent = revelar ? 'Ocultar' : 'Mostrar';
+}
+
+/** Como `alternarVisibilidade`, mas para o botão-ícone (olho) dentro do campo. */
+function alternarVisibilidadeIcone(idInput, idBotao) {
+  const input = $(idInput);
+  const botao = $(idBotao);
+  const revelar = input.type === 'password';
+  input.type = revelar ? 'text' : 'password';
+  botao.setAttribute('aria-label', revelar ? 'Ocultar senha' : 'Mostrar senha');
+  botao.setAttribute('aria-pressed', String(revelar));
+  $(`${idBotao}-aberto`).hidden = revelar;
+  $(`${idBotao}-fechado`).hidden = !revelar;
 }
 
 /* ------------------------------ senha mestra ------------------------------ */
@@ -470,11 +482,12 @@ async function aplicarAcoesAoAbrir({ codigo, config, elAviso, login }) {
     dizer(elAviso, `${texto[0].toUpperCase()}${texto.slice(1)} ✓`);
   }
 
-  // Fecha o popup sozinho quando o autopreenchimento do código der certo (opt-in).
-  // Exceção: um clique de reabertura em menos de 3s do último fechamento automático
-  // (task 32) é lido como "eu quero ver a tela", então desta vez o popup fica
-  // aberto mesmo com a config ligada — vale para qualquer domínio/config atual.
-  if (preencheuCodigo && config.autofill?.fecharAoPreencher) {
+  // Fecha o popup sozinho quando o autopreenchimento (código OU login) der certo
+  // (opt-in). Exceção: um clique de reabertura em menos de 3s do último fechamento
+  // automático (task 32) é lido como "eu quero ver a tela", então desta vez o
+  // popup fica aberto mesmo com a config ligada — vale para qualquer domínio/config
+  // atual.
+  if ((preencheuCodigo || preencheuLogin) && config.autofill?.fecharAoPreencher) {
     const resp = await enviar({ type: 'PODE_FECHAR_AUTOMATICO' }).catch(() => null);
     if (resp?.permitir !== false) window.close();
   }
@@ -939,7 +952,10 @@ async function abrirFormularioConta(id, dominio, origem = 'contas') {
   $('conta-email').value = '';
   $('conta-senha').value = '';
   $('conta-senha').type = 'password';
-  $('conta-senha-toggle').textContent = 'Mostrar';
+  $('conta-senha-toggle').setAttribute('aria-label', 'Mostrar senha');
+  $('conta-senha-toggle').setAttribute('aria-pressed', 'false');
+  $('conta-senha-toggle-aberto').hidden = false;
+  $('conta-senha-toggle-fechado').hidden = true;
   $('conta-sem-cripto').checked = false;
   $('conta-sem-cripto').disabled = false;
   dominioOriginalConta = null;
