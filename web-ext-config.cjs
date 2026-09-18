@@ -8,6 +8,7 @@ module.exports = {
     'tests/**',
     'scripts/**',
     'docs/**',
+    'examples/**',
     'web-ext-artifacts/**',
     // Manifesto do Chrome: não entra no pacote Firefox e o web-ext (Mozilla)
     // sinalizaria seu `service_worker`. Empacotado só por `empacotar.sh chrome`.

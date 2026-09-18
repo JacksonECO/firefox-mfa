@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MFA Num Toque",
-  "version": "1.0.1",
-  "description": "Gerenciador local de códigos MFA (TOTP), com foco no domínio atual e segredos sempre criptografados em repouso.",
+  "version": "1.1.0",
+  "description": "Gerenciador local de códigos MFA (TOTP) e de e-mail/senha por site, com foco no domínio atual e tudo criptografado em repouso.",
   "author": "Jackson Silveira",
   "browser_specific_settings": {
     "gecko": {

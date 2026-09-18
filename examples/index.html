@@ -12,8 +12,9 @@
         <h1>Exemplos de teste do autopreenchimento</h1>
         <p class="subtitulo">
           Páginas estáticas (HTML + CSS + JS vanilla, sem rede) que simulam telas de login com
-          campo de código OTP, para testar o autopreenchimento da extensão
-          <strong>MFA Num Toque</strong>. Cada página usa uma estrutura de input diferente.
+          campo de código OTP — e, no fim, telas de <strong>login com e-mail e senha</strong> —
+          para testar o autopreenchimento da extensão <strong>MFA Num Toque</strong>. Cada
+          página usa uma estrutura de input diferente.
         </p>
       </header>
 
@@ -134,6 +135,50 @@
         </li>
       </ul>
 
+      <h2>Login (e-mail e senha)</h2>
+      <section class="cartao">
+        <h2>Como o autopreenchimento de login decide</h2>
+        <p>
+          Além do código, a extensão preenche <strong>e-mail/usuário e senha</strong> da
+          <strong>conta principal</strong> do domínio. Ela procura o campo de senha e o de
+          usuário pelos seletores configurados (há padrões que cobrem a maioria dos sites) e:
+        </p>
+        <ol>
+          <li>ignora campos invisíveis, desabilitados, somente-leitura e <code>type="hidden"</code>;</li>
+          <li>
+            se o seletor de usuário não casar, usa o <strong>campo de texto visível
+            imediatamente anterior ao de senha</strong> no mesmo formulário;
+          </li>
+          <li>
+            escreve pelo <strong>setter nativo</strong> de <code>value</code> antes de disparar
+            <code>input</code>/<code>change</code>, para formulários controlados por framework
+            reconhecerem o valor;
+          </li>
+          <li><strong>não envia o formulário</strong> — o Enter só é disparado se você ligar a opção.</li>
+        </ol>
+        <p class="dica">
+          A senha vai do processo de fundo da extensão direto para a página: ela nunca passa pelo
+          popup. Nas páginas abaixo, o modal mostra a senha sempre mascarada.
+        </p>
+      </section>
+
+      <ul class="lista-exemplos">
+        <li class="item-exemplo">
+          <a href="login-simples.html">
+            <p class="item-titulo">11. Login clássico: e-mail + senha</p>
+            <p class="item-desc"><code>type="email"</code> + <code>type="password"</code> — coberto pelos seletores padrão.</p>
+            <span class="tag-seletor">input[type="email"] · input[type="password"]</span>
+          </a>
+        </li>
+        <li class="item-exemplo">
+          <a href="login-campos-atipicos.html">
+            <p class="item-titulo">12. Campos atípicos (fallback e override)</p>
+            <p class="item-desc">Usuário sem atributo reconhecível, mais campos escondidos como ruído.</p>
+            <span class="tag-seletor">#ident</span>
+          </a>
+        </li>
+      </ul>
+
       <section class="cartao">
         <h2>Referência rápida de seletores</h2>
         <table>
@@ -153,6 +198,8 @@
             <tr><td>6 caixas com id sequencial (prefixo + contador)</td><td><code>input[id^="token-input-mfa-"]</code></td></tr>
             <tr><td>Dois esquemas de id na mesma config (prefixos por vírgula)</td><td><code>input[id^="token-input-mfa-"], input[id^="token-input-token-"]</code></td></tr>
             <tr><td>Vários candidatos (tenta todos)</td><td><code>input[autocomplete="one-time-code"], #otp, input[name="code"]</code></td></tr>
+            <tr><td>Campo de e-mail/usuário do login</td><td><code>input[type="email"]</code> ou <code>#ident</code></td></tr>
+            <tr><td>Campo de senha do login</td><td><code>input[type="password"]</code></td></tr>
           </tbody>
         </table>
         <p class="dica">

@@ -23,11 +23,41 @@
         <form id="form-exportar" class="form config__bloco" novalidate autocomplete="off">
           <h2 class="config__titulo">Exportar backup</h2>
           <p class="config__ajuda">
-            Defina uma senha de exportação (independente da senha mestra). Ela protege o arquivo
-            e será exigida para importar.
+            Escolha o que sai no arquivo. Exportar exige <strong>a senha mestra</strong> (é o
+            momento em que os dados existem em claro) e uma <strong>senha de exportação</strong>,
+            independente dela, que criptografa o arquivo e será exigida para importar.
           </p>
+
+          <span class="field__label">O que exportar</span>
+          <label class="field field--inline">
+            <input id="exportar-mfas" type="checkbox" checked />
+            <span class="field__label">Códigos MFA</span>
+          </label>
+          <label class="field field--inline">
+            <input id="exportar-contas" type="checkbox" checked />
+            <span class="field__label">Contas do site (e-mail e senha)</span>
+          </label>
+          <label class="field field--inline">
+            <input id="exportar-config" type="checkbox" checked />
+            <span class="field__label">Configurações</span>
+          </label>
+
+          <div class="dominios">
+            <div class="dominios__topo">
+              <span class="field__label">De quais sites</span>
+              <button class="btn-link" id="exportar-todos" type="button">
+                Marcar/desmarcar todos
+              </button>
+            </div>
+            <div id="exportar-dominios"></div>
+          </div>
+
           <label class="field">
-            <span class="field__label">Senha de exportação</span>
+            <span class="field__label">Senha mestra (confirmação)</span>
+            <input class="field__input" id="exportar-mestra" type="password" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field__label">Senha de exportação (protege o arquivo)</span>
             <input class="field__input" id="exportar-senha" type="password" autocomplete="off" />
           </label>
           <p class="field__erro" id="exportar-erro" role="alert"></p>

@@ -1,6 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarBrowserMock } from './_mocks.js';
+import { LOGIN_PADRAO } from '../src/autofilllogin.js';
 import {
   normalizarConfigAutofill,
   resolverSeletor,
@@ -21,6 +22,7 @@ test('normalizarConfigAutofill coage habilitado e usa o padrão p/ seletor vazio
     seletorPadrao: SELETOR_OTP_PADRAO,
     fecharAoPreencher: false,
     porDominio: {},
+    login: { ...LOGIN_PADRAO },
   });
 });
 
@@ -70,6 +72,7 @@ test('GET_CONFIG inclui autofill (padrão na 1ª vez)', async () => {
     seletorPadrao: SELETOR_OTP_PADRAO,
     fecharAoPreencher: false,
     porDominio: {},
+    login: { ...LOGIN_PADRAO },
   });
 });
 
@@ -84,6 +87,7 @@ test('SET_AUTOFILL persiste seletor padrão e por domínio', async () => {
     seletorPadrao: '#code',
     fecharAoPreencher: false,
     porDominio: { 'a.com': '.x' },
+    login: { ...LOGIN_PADRAO },
   });
 });
 

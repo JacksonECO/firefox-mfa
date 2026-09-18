@@ -134,6 +134,49 @@ body.pagina {
   flex: 1;
 }
 
+/* Variante com o botão de mostrar/ocultar como ícone dentro do próprio campo,
+   em vez de um link de texto ao lado (ver .campo-olho). */
+.field__secret--olho {
+  position: relative;
+  display: block;
+}
+
+.field__secret--olho .field__input {
+  padding-right: calc(var(--space-3) + 28px);
+}
+
+.campo-olho {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--color-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.campo-olho:hover {
+  color: var(--color-text);
+}
+
+.campo-olho:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.campo-olho .icone {
+  width: 18px;
+  height: 18px;
+}
+
 .field__erro {
   margin: 0 0 var(--space-2);
   min-height: 1em;
@@ -285,6 +328,10 @@ body.pagina {
   color: var(--color-muted);
 }
 
+.config__ajuda--aviso {
+  color: var(--color-warning);
+}
+
 .config__ajuda code {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -297,7 +344,7 @@ body.pagina {
 
 .card {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
@@ -556,4 +603,255 @@ body.pagina {
   margin: 0;
   font-size: var(--fs-small);
   color: var(--color-warning);
+}
+
+/* Ícones SVG inline (nada carregado por rede) */
+
+.icone {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Grupos do formulário — separam visualmente nome/site, código e credenciais */
+
+.grupo {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.grupo__titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.grupo__ajuda {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+}
+
+.grupo .field:last-of-type,
+.grupo .field__erro:last-child {
+  margin-bottom: 0;
+}
+
+.acoes-adicionar {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.acoes-adicionar .btn {
+  flex: 1;
+}
+
+/* Indicador de e-mail/senha salvos no card (clicável: preenche na página) */
+
+.card__contas {
+  display: flex;
+  align-items: center;
+  padding: var(--space-1);
+  color: var(--color-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transicao), background var(--transicao);
+}
+
+.card__contas:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.card__contas:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Lista de contas do site */
+
+.conta {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.conta__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.conta__email {
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conta__rotulo {
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conta__editar {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--fs-body);
+  color: var(--focus-ring);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.conta__editar:hover {
+  background: var(--color-surface-hover);
+}
+
+.conta__editar:focus-visible,
+.conta__mostrar:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+/* Switch da conta principal — rádio nativo (1 por domínio) com aparência de switch */
+
+.switch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.switch__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.switch__trilho {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: var(--color-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  transition: background var(--transicao);
+}
+
+.switch__trilho::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--color-muted);
+  border-radius: 50%;
+  transition: transform var(--transicao), background var(--transicao);
+}
+
+.switch__input:checked + .switch__trilho {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.switch__input:checked + .switch__trilho::after {
+  background: var(--color-on-accent);
+  transform: translateX(14px);
+}
+
+.switch__input:focus-visible + .switch__trilho {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.switch__texto {
+  font-size: var(--fs-micro);
+  color: var(--color-muted);
+}
+
+.switch__input:checked ~ .switch__texto {
+  color: var(--color-text);
+}
+
+/* Linha de seletores de login por domínio (3 campos) */
+
+.al-linha {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.al-linha__dom {
+  grid-column: 1 / -1;
+}
+
+/* Seleção de domínios na exportação (task 31) */
+
+.dominios {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.dominios__topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.dominio-linha {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.dominio-linha__nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dominio-linha__contagem {
+  font-size: var(--fs-small);
+  color: var(--color-muted);
 }

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login com campos atípicos — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>12. Login com campos atípicos (fallback e overrides)</h1>
+        <p class="subtitulo">
+          O campo de usuário é um <code>type="text"</code> com <code>name</code> genérico
+          (<code>ident</code>) — nenhum seletor padrão o encontra. Serve para testar as duas
+          saídas: o <strong>fallback</strong> automático e o <strong>seletor por domínio</strong>.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>O que esperar</h2>
+        <ol>
+          <li>
+            <strong>Sem configurar nada:</strong> o seletor de senha casa, o de usuário não. A
+            extensão então usa o <strong>campo de texto visível imediatamente anterior ao de
+            senha no mesmo formulário</strong> — que aqui é o campo certo. O checkbox e o campo
+            escondido acima dele são ignorados.
+          </li>
+          <li>
+            <strong>Com override por domínio</strong> (Configurações → Autopreenchimento de
+            login → Adicionar domínio), o seletor abaixo mira o campo diretamente:
+          </li>
+        </ol>
+        <div class="seletor-box">
+          <code class="codigo-inline">#ident</code>
+          <button class="btn" type="button" data-copiar="#ident">Copiar</button>
+        </div>
+        <p class="dica">
+          O modal também informa se a escrita usou o <strong>setter nativo</strong> de
+          <code>value</code> — o caminho que formulários controlados por framework reconhecem.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-login autocomplete="off">
+        <input type="hidden" name="csrf" value="nao-me-preencha" />
+        <div>
+          <label class="campo-rotulo" for="cupom">Campo escondido por CSS (não deve ser usado)</label>
+          <input class="entrada" id="cupom" name="cupom" type="text" style="display: none" />
+        </div>
+        <div>
+          <label class="campo-rotulo" for="ident">Identificação (usuário, CPF ou e-mail)</label>
+          <input class="entrada" id="ident" name="ident" type="text" data-campo="usuario" />
+        </div>
+        <div>
+          <label class="campo-rotulo" for="pwd">Senha</label>
+          <input class="entrada" id="pwd" name="pwd" type="password" data-campo="senha" />
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="button" data-verificar>Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-login.js" defer></script>
+  </body>
+</html>

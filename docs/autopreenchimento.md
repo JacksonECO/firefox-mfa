@@ -4,6 +4,13 @@ Este documento explica **como preencher o valor do "Seletor CSS"** do autopreenc
 forma que uma pessoa (ou uma IA assistente) consiga configurá-lo corretamente para qualquer
 site.
 
+São dois autopreenchimentos independentes, cada um com o seu próprio liga/desliga:
+
+- **Código (OTP)** — o assunto da maior parte deste guia, das seções abaixo até "Dicas e
+  limites".
+- **Login (e-mail e senha)** — a seção [Autopreenchimento de login](#autopreenchimento-de-login)
+  no fim.
+
 ## O que é o valor
 
 O campo de configuração espera um **seletor CSS** — a mesma sintaxe usada em
@@ -82,3 +89,49 @@ todos. Isso é útil para uma config que funcione em mais de um site.
 > Use 1 seletor para campo único, ou um seletor que case 6 inputs para caixas separadas.
 > Pode usar vírgulas para tentar múltiplos. Prefira `#id`, `input[name=...]` ou
 > `input[autocomplete="one-time-code"]`. Nunca inclua dados sensíveis no seletor.
+
+## Autopreenchimento de login
+
+Preenche o **e-mail/usuário** e a **senha** da **conta principal** do site (a marcada com o
+switch "Principal" na tela de contas). Ligado nas Configurações, roda ao abrir a extensão;
+o ícone de conta no card também dispara o preenchimento a qualquer momento.
+
+### Os dois seletores
+
+| Campo | Padrão de fábrica |
+|---|---|
+| E-mail/usuário | `input[autocomplete="username"], input[type="email"], input[name*="email" i], input[name*="user" i], input[name*="login" i], input[id*="email" i], input[id*="user" i]` |
+| Senha | `input[type="password"]` |
+
+Os padrões cobrem a maior parte dos formulários de login. Quando não casarem, defina um
+seletor **só para aquele domínio** em "Seletores por domínio" — dá para sobrescrever só um dos
+dois campos; o outro continua usando o padrão.
+
+### Como o preenchimento decide
+
+1. Procura o **primeiro campo utilizável** de cada seletor: ignora campos invisíveis,
+   desabilitados, somente-leitura e `type="hidden"`.
+2. Se o seletor de usuário **não casar nada**, usa o **campo de texto visível imediatamente
+   anterior ao campo de senha** dentro do mesmo `<form>` — que é como quase todo login é
+   montado. Por isso muitos sites funcionam sem configurar nada.
+3. Escreve pelo **setter nativo** de `value` e então dispara `input` e `change`. Formulários
+   controlados por framework (React e semelhantes) ignoram uma atribuição direta; por esse
+   caminho eles reconhecem o valor.
+4. **Não envia o formulário.** O Enter só é disparado se você ligar "Enviar o formulário com
+   Enter depois de preencher" — desligado por padrão, porque em algumas páginas o Enter faz
+   outra coisa.
+
+### Segurança
+
+A senha **não passa pelo popup**: o popup só informa a aba e o domínio, e quem descriptografa
+e injeta na página é o processo de fundo, dono da chave. Em páginas restritas (`about:`,
+`file:`) ou sem campos, falha em silêncio.
+
+Duas páginas de exemplo para testar localmente: `examples/login-simples.html` (formato comum)
+e `examples/login-campos-atipicos.html` (fallback e overrides).
+
+### Resumo para uma IA configurar
+
+> Forneça dois seletores CSS: um para o campo de usuário/e-mail e outro para o de senha da
+> página de login. Prefira `#id` ou `input[name=...]`. Deixe em branco para usar o padrão.
+> O preenchimento nunca envia o formulário, a menos que a opção de Enter esteja ligada.

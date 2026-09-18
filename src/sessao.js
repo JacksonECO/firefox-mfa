@@ -27,10 +27,14 @@ let ultimaAtividade = 0;
 
 // Enquanto o popup está aberto, a sessão NÃO expira por inatividade — o usuário
 // pode demorar preenchendo um cadastro sem mandar mensagens ao background. O timer
-// de 2 min só (re)começa quando o popup fecha. Controlado por uma porta de longa
-// duração (runtime.connect) que o popup abre ao carregar e que se desconecta ao
-// fechar (ver marcarPopupAberto / marcarPopupFechado).
-let popupAberto = false;
+// de 2 min só (re)começa quando NENHUMA porta estiver mais conectada. Controlado
+// por uma porta de longa duração (runtime.connect) que o popup abre ao carregar e
+// que se desconecta ao fechar (ver marcarPopupAberto / marcarPopupFechado).
+// Contador, não booleano: se mais de um cliente conectar (hoje só o popup conecta,
+// mas já existiu uma segunda porta na aba de backup — removida em code review por
+// outro motivo), uma desconexão não pode derrubar o keep-alive de quem continua
+// aberto.
+let portasAbertas = 0;
 
 export { NOME_ALARME };
 
@@ -86,10 +90,24 @@ export async function definirSenhaMestra(senha) {
  * @returns {Promise<boolean>} true se a senha estava correta.
  */
 export async function desbloquear(senha, { esperar = esperaReal } = {}) {
-  if (typeof senha !== 'string' || senha.length === 0) return false;
+  const chave = await conferirSenhaMestra(senha, esperar);
+  if (!chave) return false;
+  await carregarTimeout();
+  ativarSessao(chave);
+  return true;
+}
+
+/**
+ * Núcleo da verificação da senha mestra, compartilhado pelo desbloqueio e pela
+ * reautenticação de ações sensíveis. Aplica o atraso progressivo ANTES de
+ * verificar, atualiza o contador de tentativas e devolve a chave derivada
+ * (ou null). Não mexe na sessão — quem chama decide o que fazer com a chave.
+ */
+async function conferirSenhaMestra(senha, esperar) {
+  if (typeof senha !== 'string' || senha.length === 0) return null;
   const salt = await storage.obterSalt();
   const controle = await storage.obterValorControle();
-  if (!salt || !controle) return false; // ainda não inicializado
+  if (!salt || !controle) return null; // ainda não inicializado
 
   const tentativas = await storage.obterTentativas();
   const config = normalizarConfigRateLimit((await storage.obterConfigRateLimit()) ?? {});
@@ -100,34 +118,43 @@ export async function desbloquear(senha, { esperar = esperaReal } = {}) {
     await cripto.descriptografar(controle.ciphertext, controle.iv, chave);
   } catch {
     await storage.salvarTentativas(tentativas + 1); // senha incorreta
-    return false;
+    return null;
   }
   await storage.resetarTentativas(); // acerto: zera a fricção
-  await carregarTimeout();
-  ativarSessao(chave);
-  return true;
+  return chave;
+}
+
+/**
+ * Reautenticação para ações sensíveis (exportar dados, task 31): confere a
+ * senha mestra SEM abrir nem renovar sessão. Passa pelo mesmo rate limiting do
+ * desbloqueio, para não virar um caminho de força bruta sem fricção.
+ * @returns {Promise<boolean>} true se a senha estava correta.
+ */
+export async function verificarSenhaMestra(senha, { esperar = esperaReal } = {}) {
+  return (await conferirSenhaMestra(senha, esperar)) !== null;
 }
 
 /**
  * Troca a senha mestra (task 17): valida a senha atual, deriva uma nova chave
- * (novo salt) e RECRIPTOGRAFA todos os segredos com ela (novos IVs), tudo em
- * uma escrita atômica. Mantém a sessão aberta com a nova chave.
+ * (novo salt) e RECRIPTOGRAFA todos os segredos com ela (novos IVs) — segredos
+ * de MFA e e-mail/senha das contas do site —, tudo em uma escrita atômica.
+ * Mantém a sessão aberta com a nova chave.
  * @returns {Promise<{ok: boolean, erro?: string}>}
  */
-export async function trocarSenhaMestra(senhaAtual, senhaNova) {
+export async function trocarSenhaMestra(senhaAtual, senhaNova, { esperar = esperaReal } = {}) {
   if (typeof senhaNova !== 'string' || senhaNova.length < TAMANHO_MINIMO_SENHA) {
     return { ok: false, erro: 'SENHA_NOVA_INVALIDA' };
   }
-  const salt = await storage.obterSalt();
-  const controle = await storage.obterValorControle();
-  if (!salt || !controle) return { ok: false, erro: 'NAO_INICIALIZADO' };
-
-  // Confirma a senha atual pelo decrypt do valor de controle (timing-safe).
-  const chaveAtual = await cripto.derivarChave(senhaAtual, salt);
-  try {
-    await cripto.descriptografar(controle.ciphertext, controle.iv, chaveAtual);
-  } catch {
-    return { ok: false, erro: 'SENHA_ATUAL_INCORRETA' };
+  // Confirma a senha atual pelo MESMO núcleo do desbloqueio e da reautenticação
+  // de exportação (`conferirSenhaMestra`): timing-safe e sob o mesmo rate
+  // limiting — sem isso, esta seria uma segunda verificação de senha mestra
+  // sem a fricção que a tela de login e a exportação já aplicam.
+  const chaveAtual = await conferirSenhaMestra(senhaAtual, esperar);
+  if (!chaveAtual) {
+    const inicializado = await storage.estaInicializado();
+    return inicializado
+      ? { ok: false, erro: 'SENHA_ATUAL_INCORRETA' }
+      : { ok: false, erro: 'NAO_INICIALIZADO' };
   }
 
   const novoSalt = cripto.gerarBytesAleatorios(cripto.TAMANHO_SALT);
@@ -148,9 +175,38 @@ export async function trocarSenhaMestra(senhaAtual, senhaNova) {
     const { ciphertext, iv } = await cripto.criptografar(segredo, novaChave);
     recifrados.push({ ...mfa, secretCriptografado: ciphertext, iv, updatedAt: agora });
   }
+
+  // Contas do site (task 30): e-mail e senha são recifrados do mesmo jeito, cada
+  // um com o seu novo IV. Contas de localhost sem criptografia não dependem da
+  // chave e seguem como estão.
+  const contas = await storage.listarContas();
+  const contasRecifradas = [];
+  for (const conta of contas) {
+    if (conta.semCriptografia) {
+      contasRecifradas.push(conta);
+      continue;
+    }
+    const email = await cripto.descriptografar(conta.emailCriptografado, conta.ivEmail, chaveAtual);
+    const senha = await cripto.descriptografar(conta.senhaCriptografada, conta.ivSenha, chaveAtual);
+    const cifradoEmail = await cripto.criptografar(email, novaChave);
+    const cifradoSenha = await cripto.criptografar(senha, novaChave);
+    contasRecifradas.push({
+      ...conta,
+      emailCriptografado: cifradoEmail.ciphertext,
+      ivEmail: cifradoEmail.iv,
+      senhaCriptografada: cifradoSenha.ciphertext,
+      ivSenha: cifradoSenha.iv,
+      updatedAt: agora,
+    });
+  }
   const novoControle = await cripto.criptografar(cripto.VALOR_CONTROLE, novaChave);
 
-  await storage.aplicarTrocaSenha({ saltBytes: novoSalt, controle: novoControle, mfas: recifrados });
+  await storage.aplicarTrocaSenha({
+    saltBytes: novoSalt,
+    controle: novoControle,
+    mfas: recifrados,
+    contas: contasRecifradas,
+  });
   ativarSessao(novaChave);
   return { ok: true };
 }
@@ -168,7 +224,7 @@ export function ativarSessao(chave) {
  */
 export function registrarAtividade() {
   ultimaAtividade = Date.now();
-  if (popupAberto) cancelarExpiracao();
+  if (portasAbertas > 0) cancelarExpiracao();
   else agendarExpiracao();
   iniciarKeepalive(); // garante o heartbeat ativo p/ a janela atual (idempotente)
 }
@@ -179,7 +235,7 @@ export function registrarAtividade() {
  */
 export function estaDesbloqueado() {
   if (!chaveEmMemoria) return false;
-  if (!popupAberto && Date.now() - ultimaAtividade > timeoutMs) {
+  if (portasAbertas === 0 && Date.now() - ultimaAtividade > timeoutMs) {
     bloquear();
     return false;
   }
@@ -191,18 +247,19 @@ export function estaDesbloqueado() {
  * viva, suspendendo a expiração por inatividade enquanto estiver aberto.
  */
 export function marcarPopupAberto() {
-  popupAberto = true;
+  portasAbertas += 1;
   ultimaAtividade = Date.now();
   cancelarExpiracao();
 }
 
 /**
- * Sinaliza que o popup fechou (porta desconectada): reinicia a janela de
- * inatividade do zero, de forma que o tempo só passa a contar após o fechamento.
+ * Sinaliza que uma porta fechou (desconectada). Só reinicia a janela de
+ * inatividade quando a ÚLTIMA porta desconecta — com outra ainda aberta
+ * (contador > 0), a sessão continua sem expirar por causa dela.
  */
 export function marcarPopupFechado() {
-  popupAberto = false;
-  if (chaveEmMemoria) registrarAtividade();
+  portasAbertas = Math.max(0, portasAbertas - 1);
+  if (portasAbertas === 0 && chaveEmMemoria) registrarAtividade();
 }
 
 /**
@@ -260,7 +317,7 @@ function iniciarKeepalive() {
       pararKeepalive(); // janela esgotada (já bloqueou) ou sessão encerrada
       return;
     }
-    if (popupAberto) return; // popup aberto: a porta já segura o worker
+    if (portasAbertas > 0) return; // alguma porta aberta: ela já segura o worker
     const restante = timeoutMs - (Date.now() - ultimaAtividade);
     if (restante <= MARGEM_SUSPENSAO_MS) {
       // Faltam <= 30s: para de bater e deixa o Firefox suspender o worker ~no fim

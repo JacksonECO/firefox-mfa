@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login clássico (e-mail + senha) — Teste de autopreenchimento</title>
+    <link rel="stylesheet" href="assets/estilo.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="topo">
+        <a class="voltar" href="index.html">← Voltar ao índice</a>
+        <h1>11. Login clássico: e-mail + senha</h1>
+        <p class="subtitulo">
+          Um <code>&lt;input type="email"&gt;</code> e um <code>&lt;input type="password"&gt;</code>
+          dentro do mesmo formulário — o formato que os <strong>seletores padrão</strong> de login
+          já cobrem, sem configurar nada por domínio.
+        </p>
+      </header>
+
+      <section class="cartao">
+        <h2>Seletores padrão (não precisa configurar)</h2>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[type="email"]</code>
+          <button class="btn" type="button" data-copiar='input[type="email"]'>Copiar</button>
+        </div>
+        <div class="seletor-box">
+          <code class="codigo-inline">input[type="password"]</code>
+          <button class="btn" type="button" data-copiar='input[type="password"]'>Copiar</button>
+        </div>
+        <p class="dica">
+          A extensão preenche a <strong>conta principal</strong> do domínio. Sem enviar o
+          formulário: o Enter só é disparado se você ligar "enviar com Enter" nas configurações.
+        </p>
+      </section>
+
+      <form class="area-teste" data-area-login autocomplete="off">
+        <div>
+          <label class="campo-rotulo" for="email">E-mail</label>
+          <input
+            class="entrada"
+            id="email"
+            name="email"
+            type="email"
+            data-campo="usuario"
+            placeholder="voce@exemplo.com"
+          />
+        </div>
+        <div>
+          <label class="campo-rotulo" for="senha">Senha</label>
+          <input
+            class="entrada"
+            id="senha"
+            name="password"
+            type="password"
+            data-campo="senha"
+            placeholder="••••••••"
+          />
+        </div>
+        <div class="acoes">
+          <button class="btn btn-accent" type="button" data-verificar>Verificar</button>
+          <button class="btn" type="button" data-limpar>Limpar</button>
+        </div>
+        <p class="dica">
+          Preencha pela extensão e clique em <strong>Verificar</strong> — o modal mostra o que
+          chegou (senha sempre mascarada).
+        </p>
+      </form>
+
+      <p class="rodape">Página de teste · MFA Num Toque</p>
+    </div>
+
+    <script src="assets/teste-login.js" defer></script>
+  </body>
+</html>

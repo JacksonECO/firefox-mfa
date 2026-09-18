@@ -14,12 +14,28 @@ import * as sessao from './sessao.js';
 import * as storage from './storage.js';
 import * as cripto from './crypto.js';
 import { validarCadastro, segredoFoiAlterado } from './cadastro.js';
-import { ehLocalhost } from './dominio.js';
+import { validarConta } from './conta.js';
+import { ehLocalhost, normalizarDominio, extrairDominioDaAba } from './dominio.js';
 import { gerarTOTP, segundosRestantes } from './totp.js';
-import { exportarDados, importarDados } from './backup.js';
+import {
+  exportarDados,
+  importarDados,
+  normalizarFiltroExport,
+  dominioSelecionado,
+} from './backup.js';
 import { normalizarConfigRateLimit, RATE_LIMIT_PADRAO } from './ratelimit.js';
 import { normalizarConfigAutofill, AUTOFILL_PADRAO } from './autofill.js';
+import { preencherLogin, resolverSeletorLogin } from './autofilllogin.js';
 import { normalizarTimeout, TIMEOUT_PADRAO_MS } from './sessaoconfig.js';
+
+// Janela de reabertura rápida (task 32): não é config do usuário, é um
+// comportamento fixo de UX. Se `fecharAoPreencher` fechar o popup sozinho e o
+// usuário clicar no ícone de novo em menos de 3s, entende-se que o clique
+// rápido é intencional (ver a tela), então essa reabertura fica visível mesmo
+// com a config ligada. Estado só em memória — não é segredo, reinício do
+// background reseta e não há problema nisso.
+const JANELA_REABERTURA_RAPIDA_MS = 3000;
+let ultimoFechamentoAutomaticoEm = null;
 
 /** Coleta as configurações atuais (não sensíveis) para exportar. */
 async function coletarConfiguracoes() {
@@ -68,6 +84,112 @@ async function lerSegredo(mfa, chave) {
 }
 
 /**
+ * Lê e-mail e senha de uma conta: em claro se for localhost sem cripto, senão
+ * decripta cada campo com o seu próprio IV. Só é chamada onde o valor em claro
+ * é realmente necessário (revelar na edição, autopreencher, exportar).
+ */
+async function lerCredenciais(conta, chave) {
+  if (conta.semCriptografia) {
+    return { email: conta.emailEmClaro, senha: conta.senhaEmClaro };
+  }
+  return {
+    email: await cripto.descriptografar(conta.emailCriptografado, conta.ivEmail, chave),
+    senha: await cripto.descriptografar(conta.senhaCriptografada, conta.ivSenha, chave),
+  };
+}
+
+/**
+ * Metadados de uma conta para a UI: inclui o e-mail (necessário para identificar
+ * a conta na lista) e NUNCA a senha. Se a leitura do e-mail falhar (registro
+ * corrompido), devolve o item marcado em vez de derrubar a listagem inteira.
+ */
+async function metadadosConta(conta, chave) {
+  const base = {
+    id: conta.id,
+    dominio: conta.dominio,
+    rotulo: conta.rotulo ?? null,
+    principal: conta.principal === true,
+    semCriptografia: conta.semCriptografia === true,
+    createdAt: conta.createdAt,
+    updatedAt: conta.updatedAt,
+  };
+  try {
+    const email = conta.semCriptografia
+      ? conta.emailEmClaro
+      : await cripto.descriptografar(conta.emailCriptografado, conta.ivEmail, chave);
+    return { ...base, email };
+  } catch {
+    return { ...base, email: '', falhaLeitura: true };
+  }
+}
+
+/** Aplica `metadadosConta` a uma lista, preservando a ordem. */
+async function listaDeMetadadosConta(contas, chave) {
+  const saida = [];
+  for (const conta of contas) saida.push(await metadadosConta(conta, chave));
+  return saida;
+}
+
+/** A conta que recebe o autopreenchimento: a escolhida, senão a principal. */
+function escolherConta(contas, contaId) {
+  if (contaId) return contas.find((c) => c.id === contaId) ?? null;
+  return contas.find((c) => c.principal === true) ?? contas[0] ?? null;
+}
+
+/**
+ * Injeta e-mail e senha na aba. A senha em claro existe apenas neste escopo do
+ * background e vai direto para o `executeScript` — nunca passa pelo popup nem
+ * é registrada em log. (Strings JS são imutáveis: não há `.fill(0)` possível
+ * aqui; o que fazemos é manter o escopo mínimo e soltar a referência.)
+ */
+async function preencherLoginNaAba({ conta, chave, tabId, config }) {
+  if (!conta) return { ok: false, erro: 'SEM_CONTA' };
+  if (typeof tabId !== 'number') return { ok: false, erro: 'SEM_ABA' };
+  if (!globalThis.browser?.scripting?.executeScript) return { ok: false, erro: 'SEM_SCRIPTING' };
+
+  // Defesa em profundidade: o popup escolhe QUAL domínio preencher, mas nunca
+  // decide sozinho PARA ONDE a senha vai. Sem esta checagem, um domínio sem
+  // MFA cai no modo "ver todos" da listagem e mostra cards de outros sites —
+  // clicar no ícone injetaria a credencial de um domínio na aba de outro.
+  let aba;
+  try {
+    [aba] = await browser.tabs.query({ active: true, currentWindow: true });
+  } catch {
+    return { ok: false, erro: 'ABA_INVALIDA' };
+  }
+  if (!aba || aba.id !== tabId) return { ok: false, erro: 'ABA_INVALIDA' };
+  if (extrairDominioDaAba(aba) !== conta.dominio) {
+    return { ok: false, erro: 'DOMINIO_DIVERGENTE' };
+  }
+
+  const seletores = resolverSeletorLogin(config, conta.dominio);
+  let credenciais;
+  try {
+    credenciais = await lerCredenciais(conta, chave);
+  } catch {
+    return { ok: false, erro: 'FALHA' };
+  }
+  try {
+    const [resultado] = await browser.scripting.executeScript({
+      target: { tabId },
+      func: preencherLogin,
+      args: [
+        seletores.email,
+        seletores.senha,
+        credenciais.email,
+        credenciais.senha,
+        config.login.submeter === true,
+      ],
+    });
+    return { ok: true, preencheu: resultado?.result?.ok === true };
+  } catch {
+    return { ok: false, erro: 'FALHA_INJECAO' }; // aba restrita / sem permissão
+  } finally {
+    credenciais = null;
+  }
+}
+
+/**
  * Roteia uma mensagem vinda do popup. Retorna sempre um objeto serializável —
  * nunca a CryptoKey nem um segredo em claro.
  *
@@ -84,8 +206,15 @@ async function lerSegredo(mfa, chave) {
  *  - REVEAL_SECRET      → { ok, secret } (exceção do fluxo de edição) (task 09)
  *  - UPDATE_MFA         → { ok, mfa? , erro?/erros? }           (task 09)
  *  - DELETE_MFA         → { ok, removidos }                     (task 09)
- *  - EXPORT_DATA        → { ok, arquivo }                       (task 14)
- *  - IMPORT_DATA        → { ok, importados }                    (task 14)
+ *  - EXPORT_DATA        → { ok, arquivo } (senha mestra + filtro) (tasks 14/31)
+ *  - EXPORT_RESUMO      → { ok, dominios } (o que há p/ exportar)  (task 31)
+ *  - IMPORT_DATA        → { ok, importados, contasImportadas }     (tasks 14/31)
+ *  - LIST_CONTAS        → { ok, contas } (com e-mail, sem senha) (task 30)
+ *  - CONTAS_RESUMO      → { ok, porDominio } (só contagem)       (task 30)
+ *  - REVEAL_CONTA       → { ok, email, senha } (só na edição)    (task 30)
+ *  - SAVE_CONTA / UPDATE_CONTA / DELETE_CONTA                    (task 30)
+ *  - SET_CONTA_PRINCIPAL → { ok, contas }                        (task 30)
+ *  - AUTOFILL_LOGIN     → { ok, preencheu } (injeta na aba)      (task 30)
  */
 export async function rotear(mensagem) {
   switch (mensagem?.type) {
@@ -275,45 +404,284 @@ export async function rotear(mensagem) {
       return { ok: true, removidos };
     }
 
-    case 'EXPORT_DATA': {
+    /* ------------- contas do site: e-mail + senha por domínio (task 30) -------------
+     * A senha do site só sai daqui em REVEAL_CONTA (fluxo de edição, mesma
+     * exceção deliberada do REVEAL_SECRET) e no autopreenchimento, que injeta
+     * direto na aba a partir do background — o popup nunca a recebe. */
+
+    case 'LIST_CONTAS': {
       const chave = sessao.obterChave();
       if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
-      if (!mensagem.senha) return { ok: false, erro: 'SENHA_OBRIGATORIA' };
+      const dominio = normalizarDominio(mensagem.dominio);
+      const contas =
+        dominio === null ? await storage.listarContas() : await storage.listarContasPorDominio(dominio);
+      return { ok: true, contas: await listaDeMetadadosConta(contas, chave) };
+    }
+
+    case 'CONTAS_RESUMO': {
+      // Só contagem por domínio — não decripta nada. Alimenta o ícone dos cards.
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      return { ok: true, porDominio: await storage.contarContasPorDominio() };
+    }
+
+    case 'REVEAL_CONTA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const conta = await storage.obterConta(mensagem.id);
+      if (!conta) return { ok: false, erro: 'NAO_ENCONTRADO' };
       try {
-        // Descriptografa cada segredo localmente e reembala no arquivo, que é
-        // criptografado com a senha de exportação. Nada em claro vai ao arquivo.
-        const todos = await storage.listarMfas();
-        const registros = [];
-        for (const mfa of todos) {
-          const secret = await lerSegredo(mfa, chave);
-          registros.push({
-            nome: mfa.nome,
-            dominio: mfa.dominio,
-            secret,
-            semCriptografia: mfa.semCriptografia === true,
-          });
+        const { email, senha } = await lerCredenciais(conta, chave);
+        return { ok: true, email, senha };
+      } catch {
+        return { ok: false, erro: 'FALHA' };
+      }
+    }
+
+    case 'SAVE_CONTA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      // Defesa em profundidade: revalida no background, sem confiar no popup.
+      const validacao = validarConta({
+        dominio: mensagem.dominio,
+        email: mensagem.email,
+        senha: mensagem.senha,
+        rotulo: mensagem.rotulo,
+      });
+      if (!validacao.valido) return { ok: false, erros: validacao.erros };
+      try {
+        const dados = { ...validacao.normalizado, principal: mensagem.principal === true };
+        // Opção sem criptografia: estritamente para localhost (task 26).
+        if (mensagem.semCriptografia) {
+          if (!ehLocalhost(dados.dominio)) return { ok: false, erro: 'SEM_CRIPTO_SO_LOCALHOST' };
+          const conta = await storage.salvarContaSemCripto(dados);
+          return { ok: true, conta: await metadadosConta(conta, chave) };
         }
-        const configuracoes = await coletarConfiguracoes();
-        const arquivo = await exportarDados(registros, configuracoes, mensagem.senha);
-        return { ok: true, arquivo };
+        const conta = await storage.salvarConta(dados, chave);
+        return { ok: true, conta: await metadadosConta(conta, chave) };
       } catch (erro) {
         return { ok: false, erro: erro.message };
       }
+    }
+
+    case 'UPDATE_CONTA': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      // Senha em branco na edição = manter a atual (não exige o campo).
+      const validacao = validarConta(
+        {
+          dominio: mensagem.dominio,
+          email: mensagem.email,
+          senha: mensagem.senha,
+          rotulo: mensagem.rotulo,
+        },
+        { exigirSenha: false },
+      );
+      if (!validacao.valido) return { ok: false, erros: validacao.erros };
+      const atual = await storage.obterConta(mensagem.id);
+      if (!atual) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      try {
+        const dados = { ...validacao.normalizado, principal: mensagem.principal === true };
+        let conta;
+        if (atual.semCriptografia) {
+          // Segue em claro enquanto o domínio for localhost; ao sair de
+          // localhost, converte para criptografada (conversão de mão única).
+          conta = ehLocalhost(dados.dominio)
+            ? await storage.atualizarContaSemCripto(mensagem.id, dados)
+            : await storage.converterContaParaCriptografada(mensagem.id, dados, chave);
+        } else {
+          conta = await storage.atualizarConta(mensagem.id, dados, chave);
+        }
+        return { ok: true, conta: await metadadosConta(conta, chave) };
+      } catch (erro) {
+        return { ok: false, erro: erro.message };
+      }
+    }
+
+    case 'SET_CONTA_PRINCIPAL': {
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const conta = await storage.definirContaPrincipal(mensagem.id);
+      if (!conta) return { ok: false, erro: 'NAO_ENCONTRADO' };
+      const doDominio = await storage.listarContasPorDominio(conta.dominio);
+      return { ok: true, contas: await listaDeMetadadosConta(doDominio, chave) };
+    }
+
+    case 'DELETE_CONTA': {
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const removidos = await storage.removerConta(mensagem.id);
+      return { ok: true, removidos };
+    }
+
+    case 'LIST_CONTAS_LOCALHOST': {
+      // Fluxo localhost SEM senha mestra: só contas sem criptografia daquele
+      // host local. Nunca toca em conta criptografada nem de outro domínio.
+      if (!ehLocalhost(mensagem.dominio)) return { ok: true, contas: [] };
+      const todas = await storage.listarContas();
+      const locais = todas.filter(
+        (c) =>
+          c.semCriptografia === true && c.dominio === mensagem.dominio && ehLocalhost(c.dominio),
+      );
+      return { ok: true, contas: await listaDeMetadadosConta(locais, null) };
+    }
+
+    case 'AUTOFILL_LOGIN': {
+      // A senha vai do background direto para a aba — o popup só pede.
+      // `habilitado` governa TANTO a ação automática ao abrir QUANTO o clique
+      // manual no ícone do card: diferente da autocópia do código (que só
+      // copia para a área de transferência, sem tocar na página), preencher
+      // login ESCREVE a senha no DOM da página — qualquer script ali presente
+      // pode lê-la. Por isso não há bypass "manual" aqui: com a opção
+      // desligada, nenhum caminho preenche, nem automático nem por clique.
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      const config = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      if (!config.login.habilitado) {
+        return { ok: false, erro: 'DESABILITADO' };
+      }
+      const dominio = normalizarDominio(mensagem.dominio);
+      if (dominio === null) return { ok: false, erro: 'SEM_DOMINIO' };
+      const contas = await storage.listarContasPorDominio(dominio);
+      return preencherLoginNaAba({
+        conta: escolherConta(contas, mensagem.contaId),
+        chave,
+        tabId: mensagem.tabId,
+        config,
+      });
+    }
+
+    case 'AUTOFILL_LOGIN_LOCALHOST': {
+      // Fluxo localhost sem senha mestra: só contas sem criptografia do host
+      // local — mesmo guard duplo do LIST_CONTAS_LOCALHOST. Mesma regra do
+      // caso acima: sem bypass manual, `habilitado` governa os dois caminhos.
+      if (!ehLocalhost(mensagem.dominio)) return { ok: false, erro: 'NAO_PERMITIDO' };
+      const config = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      if (!config.login.habilitado) {
+        return { ok: false, erro: 'DESABILITADO' };
+      }
+      const todas = await storage.listarContas();
+      const locais = todas.filter(
+        (c) =>
+          c.semCriptografia === true && c.dominio === mensagem.dominio && ehLocalhost(c.dominio),
+      );
+      return preencherLoginNaAba({
+        conta: escolherConta(locais, mensagem.contaId),
+        chave: null,
+        tabId: mensagem.tabId,
+        config,
+      });
+    }
+
+    case 'EXPORT_DATA': {
+      // Exportar é o momento em que TUDO existe em claro na memória: por isso
+      // exige a senha mestra de novo (reautenticação, com o mesmo rate limiting
+      // do desbloqueio), além da senha que criptografa o arquivo.
+      const chave = sessao.obterChave();
+      if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      if (!mensagem.senha) return { ok: false, erro: 'SENHA_OBRIGATORIA' };
+      if (!mensagem.senhaMestra) return { ok: false, erro: 'SENHA_MESTRA_OBRIGATORIA' };
+      if (!(await sessao.verificarSenhaMestra(mensagem.senhaMestra))) {
+        return { ok: false, erro: 'SENHA_MESTRA_INCORRETA' };
+      }
+      try {
+        // Descriptografa localmente e reembala no arquivo, que é criptografado
+        // com a senha de exportação. Nada em claro vai ao arquivo.
+        const filtro = normalizarFiltroExport(mensagem.filtro);
+        // Defesa em profundidade: o popup já impede confirmar sem nenhum site
+        // marcado, mas o background (que não deve confiar só na UI) recusa um
+        // arquivo vazio da mesma forma — `dominios: []` é uma seleção
+        // explicitamente vazia, diferente de `null` ("todos os sites").
+        if (
+          Array.isArray(filtro.dominios) &&
+          filtro.dominios.length === 0 &&
+          (filtro.incluirMfas || filtro.incluirContas)
+        ) {
+          return { ok: false, erro: 'NENHUM_SITE_SELECIONADO' };
+        }
+        const mfas = [];
+        if (filtro.incluirMfas) {
+          for (const mfa of await storage.listarMfas()) {
+            if (!dominioSelecionado(filtro, mfa.dominio)) continue;
+            mfas.push({
+              nome: mfa.nome,
+              dominio: mfa.dominio,
+              secret: await lerSegredo(mfa, chave),
+              semCriptografia: mfa.semCriptografia === true,
+            });
+          }
+        }
+        const contas = [];
+        if (filtro.incluirContas) {
+          for (const conta of await storage.listarContas()) {
+            if (!dominioSelecionado(filtro, conta.dominio)) continue;
+            const credenciais = await lerCredenciais(conta, chave);
+            contas.push({
+              dominio: conta.dominio,
+              rotulo: conta.rotulo ?? null,
+              email: credenciais.email,
+              senha: credenciais.senha,
+              principal: conta.principal === true,
+              semCriptografia: conta.semCriptografia === true,
+            });
+          }
+        }
+        const configuracoes = filtro.incluirConfig ? await coletarConfiguracoes() : null;
+        const arquivo = await exportarDados({ mfas, contas, configuracoes }, mensagem.senha);
+        return { ok: true, arquivo, exportados: { mfas: mfas.length, contas: contas.length } };
+      } catch {
+        // Código estável (nunca a mensagem interna da exceção) — mesma
+        // disciplina do IMPORT_DATA: a UI já mapeia só os códigos conhecidos.
+        return { ok: false, erro: 'FALHA_EXPORTACAO' };
+      }
+    }
+
+    case 'EXPORT_RESUMO': {
+      // O que existe para exportar, por domínio — só metadados (nome do domínio
+      // e contagens). Alimenta a seleção de domínios da tela de backup.
+      if (!sessao.estaDesbloqueado()) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
+      sessao.registrarAtividade();
+      const porDominio = new Map();
+      const entrada = (dominio) => {
+        const chaveMapa = dominio ?? null;
+        if (!porDominio.has(chaveMapa)) porDominio.set(chaveMapa, { dominio: chaveMapa, mfas: 0, contas: 0 });
+        return porDominio.get(chaveMapa);
+      };
+      for (const mfa of await storage.listarMfas()) entrada(mfa.dominio).mfas += 1;
+      for (const conta of await storage.listarContas()) entrada(conta.dominio).contas += 1;
+      return { ok: true, dominios: [...porDominio.values()] };
     }
 
     case 'IMPORT_DATA': {
       const chave = sessao.obterChave();
       if (!chave) return { ok: false, erro: 'SESSAO_BLOQUEADA' };
       try {
-        const { mfas, configuracoes } = await importarDados(mensagem.arquivo, mensagem.senha);
+        const { mfas, contas, configuracoes } = await importarDados(
+          mensagem.arquivo,
+          mensagem.senha,
+        );
         // Re-criptografa cada registro com a chave local e acrescenta ao cofre.
+        // Cada item passa pela MESMA validação/normalização do cadastro manual
+        // (defesa em profundidade: um backup editado à mão, ou de um formato
+        // futuro de terceiros, não pode gravar um domínio com grafia divergente
+        // da usada nos filtros — que comparam string exata — nem um segredo em
+        // formato inválido).
         let importados = 0;
         for (const reg of mfas) {
-          if (!reg?.nome || !reg?.secret) continue;
+          const validacao = validarCadastro({
+            nome: reg?.nome,
+            dominio: reg?.dominio,
+            secret: reg?.secret,
+          });
+          if (!validacao.valido) continue;
           const dados = {
-            nome: reg.nome,
-            dominio: reg.dominio ?? null,
-            secretEmClaro: reg.secret,
+            nome: validacao.normalizado.nome,
+            dominio: validacao.normalizado.dominio,
+            secretEmClaro: validacao.normalizado.secret,
           };
           // Preserva o modo sem criptografia só se ainda for localhost.
           if (reg.semCriptografia && ehLocalhost(dados.dominio)) {
@@ -323,12 +691,40 @@ export async function rotear(mensagem) {
           }
           importados += 1;
         }
+
+        // Contas: `principal: false` deixa a decisão para a invariante do
+        // storage — se o domínio ainda não tem principal, a importada vira a
+        // principal; se já tem, a que estava aqui continua sendo.
+        let contasImportadas = 0;
+        for (const reg of contas) {
+          const validacao = validarConta({
+            dominio: reg?.dominio,
+            email: reg?.email,
+            senha: reg?.senha,
+            rotulo: reg?.rotulo,
+          });
+          if (!validacao.valido) continue;
+          const dados = {
+            dominio: validacao.normalizado.dominio,
+            rotulo: validacao.normalizado.rotulo,
+            email: validacao.normalizado.email,
+            senha: validacao.normalizado.senha,
+            principal: false,
+          };
+          if (reg.semCriptografia && ehLocalhost(dados.dominio)) {
+            await storage.salvarContaSemCripto(dados);
+          } else {
+            await storage.salvarConta(dados, chave);
+          }
+          contasImportadas += 1;
+        }
+
         let configImportada = false;
         if (mensagem.importarConfig && configuracoes) {
           await aplicarConfiguracoes(configuracoes);
           configImportada = true;
         }
-        return { ok: true, importados, configImportada };
+        return { ok: true, importados, contasImportadas, configImportada };
       } catch {
         return { ok: false, erro: 'SENHA_OU_ARQUIVO_INVALIDO' };
       }
@@ -347,6 +743,34 @@ export async function rotear(mensagem) {
       );
       const autocopiar = await storage.obterAutocopiar();
       return { ok: true, rateLimit, autofill, sessaoTimeoutMs, autocopiar };
+    }
+
+    case 'GET_CONFIG_PUBLICO': {
+      // Config NÃO sensível necessária para as ações "ao abrir" (autocópia/
+      // autopreenchimento) no fluxo localhost sem senha mestra (task 28). NÃO
+      // exige sessão e NÃO expõe nada secreto: só os flags de autocópia e a
+      // config de autofill (seletores CSS / mapa de domínios). Nunca toca em
+      // segredo, chave, salt nem valor de controle.
+      const autofill = normalizarConfigAutofill(
+        (await storage.obterConfigAutofill()) ?? AUTOFILL_PADRAO,
+      );
+      const autocopiar = await storage.obterAutocopiar();
+      return { ok: true, autocopiar, autofill };
+    }
+
+    case 'PODE_FECHAR_AUTOMATICO': {
+      // Sem exigir sessão: é só um cronômetro de UX (task 32), não toca em
+      // segredo, chave nem storage — vale também no fluxo localhost.
+      const agora = Date.now();
+      const reabriuRapido =
+        ultimoFechamentoAutomaticoEm !== null &&
+        agora - ultimoFechamentoAutomaticoEm < JANELA_REABERTURA_RAPIDA_MS;
+      if (reabriuRapido) {
+        ultimoFechamentoAutomaticoEm = null; // consome a janela, não empilha
+        return { ok: true, permitir: false };
+      }
+      ultimoFechamentoAutomaticoEm = agora;
+      return { ok: true, permitir: true };
     }
 
     case 'SET_AUTOCOPY': {

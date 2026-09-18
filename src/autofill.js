@@ -7,6 +7,8 @@
 // seletor pode casar um único input ou vários (um por dígito), e pode conter
 // múltiplos seletores separados por vírgula (querySelectorAll).
 
+import { LOGIN_PADRAO, normalizarConfigLogin } from './autofilllogin.js';
+
 export const SELETOR_OTP_PADRAO = 'input[autocomplete="one-time-code"]';
 
 export const AUTOFILL_PADRAO = Object.freeze({
@@ -14,6 +16,9 @@ export const AUTOFILL_PADRAO = Object.freeze({
   seletorPadrao: SELETOR_OTP_PADRAO,
   fecharAoPreencher: false,
   porDominio: {},
+  // Sub-config do autopreenchimento de e-mail/senha (task 30). Independente do
+  // de MFA: ligar um não liga o outro.
+  login: LOGIN_PADRAO,
 });
 
 const ehTexto = (v) => typeof v === 'string';
@@ -21,7 +26,8 @@ const ehTexto = (v) => typeof v === 'string';
 /**
  * Sanitiza a config de autofill. Aceita o formato antigo (`seletor`) e migra
  * para `seletorPadrao`. Normaliza domínios (minúsculo, sem espaços) e descarta
- * entradas vazias.
+ * entradas vazias. Config sem o bloco `login` (salva antes da task 30) recebe
+ * os padrões — desligado.
  */
 export function normalizarConfigAutofill(parcial = {}) {
   let seletorPadrao = SELETOR_OTP_PADRAO;
@@ -46,6 +52,7 @@ export function normalizarConfigAutofill(parcial = {}) {
     seletorPadrao,
     fecharAoPreencher: Boolean(parcial.fecharAoPreencher),
     porDominio,
+    login: normalizarConfigLogin(parcial.login),
   };
 }
 
