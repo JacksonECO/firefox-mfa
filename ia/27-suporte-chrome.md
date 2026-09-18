@@ -74,7 +74,12 @@ navegadores (ambos suspendem o worker ~30s ociosos).
 
 - `tests/navegador.test.js`: (a) só `chrome` → cria alias; (b) `browser` já existe → não
   sobrescreve; (c) nenhum dos dois → não lança. Reavalia o módulo via query-string por cenário.
-- Os 17 testes existentes não mudam (rodam em Node com `browser` mockado).
+- `tests/manifestos.test.js`: paridade entre `manifest.json` e `manifest.chrome.json` — versão,
+  descrição, permissões e CSP idênticas; `background` (scripts vs. service_worker) e ícones
+  (SVG vs. PNG) divergem do jeito esperado; todo PNG referenciado existe em disco. Criado após
+  o merge de main→chrome deixar a versão do manifesto do Chrome desatualizada em silêncio.
+- Os demais testes existentes (rodam em Node com `browser` mockado) não mudam por causa deste
+  suporte; o total cresce conforme novas tasks adicionam os seus.
 
 ## Critérios de aceite (manuais)
 
@@ -83,13 +88,25 @@ navegadores (ambos suspendem o worker ~30s ociosos).
 - Chrome: `./scripts/empacotar.sh chrome` → `chrome://extensions` (Modo desenvolvedor) →
   "Carregar sem compactação" em `web-ext-artifacts/chrome-build/`. Criar senha mestra,
   cadastrar MFA, gerar/copiar código, autopreenchimento (páginas em `examples/`), expiração de
-  sessão (~2 min com popup fechado), trocar senha mestra, backup export/import. Ícones visíveis.
-- `web-ext-artifacts/chrome-mfa.zip` tem `manifest.json` (versão Chrome) na raiz.
+  sessão (~2 min com popup fechado), trocar senha mestra, backup export/import, contas do site
+  e autopreenchimento de login (task 30), exportação seletiva (task 31), reabertura rápida
+  (task 32). Ícones visíveis e atualizados (ver nota abaixo).
+- `web-ext-artifacts/chrome-mfa-<versao>.zip` tem `manifest.json` (versão Chrome) na raiz, com
+  a versão batendo com `manifest.json` do Firefox.
+
+## Nota: manter os dois manifestos e os ícones em dia
+
+Como o `manifest.chrome.json` é um arquivo separado, ele não é atualizado automaticamente
+quando `manifest.json` muda — isso já aconteceu uma vez (o Chrome ficou preso em uma versão
+antiga depois de um merge). Ao mudar versão, descrição ou permissões, altere **os dois**
+manifestos (o `tests/manifestos.test.js` falha se ficarem diferentes). Ao editar
+`icons/icon.svg`, rode `scripts/gerar-icones.sh` (ou apenas empacote — `empacotar.sh chrome`
+regenera os PNGs sozinho quando o SVG é mais novo que eles).
 
 ## Arquivos
 
 - **Novos:** `src/navegador.js`, `manifest.chrome.json`, `icons/icon-{16,32,48,128}.png`,
-  `scripts/gerar-icones.sh`, `tests/navegador.test.js`, este doc.
+  `scripts/gerar-icones.sh`, `tests/navegador.test.js`, `tests/manifestos.test.js`, este doc.
 - **Alterados:** `src/background.js`, `popup/popup.js`, `popup/backup.js` (1 import no topo);
   `scripts/empacotar.sh`, `package.json`, `web-ext-config.cjs`, `src/sessao.js` (comentários),
   `CLAUDE.md`, `README.md`.

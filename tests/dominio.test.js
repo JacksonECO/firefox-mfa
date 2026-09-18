@@ -20,6 +20,11 @@ test('about:/file:/sem url retornam null sem lançar', () => {
   assert.equal(extrairDominioDaAba(undefined), null);
 });
 
+test('páginas internas do Chrome também retornam null (paridade com about:/moz-extension:)', () => {
+  assert.equal(extrairDominioDaAba({ url: 'chrome://extensions' }), null);
+  assert.equal(extrairDominioDaAba({ url: 'chrome-extension://abc/popup/popup.html' }), null);
+});
+
 test('URL malformada retorna null', () => {
   assert.equal(extrairDominioDaAba({ url: 'isto não é uma url' }), null);
 });

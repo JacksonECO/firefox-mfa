@@ -78,7 +78,7 @@ todos. Isso é útil para uma config que funcione em mais de um site.
   dinamicamente (ex.: `css-1a2b3c`), que mudam a cada build do site.
 - Se o seletor casar o **campo errado**, o pior caso é colar o código num input visível — o
   mesmo que você faria manualmente. Ajuste o seletor para ser mais específico.
-- Em páginas restritas (`about:`, `file:`) ou sem o campo, o preenchimento falha em silêncio,
+- Em páginas restritas (`about:`, `chrome://`, `file:`, lojas de extensões) ou sem o campo, o preenchimento falha em silêncio,
   sem atrapalhar o popup.
 - A partir da task 23, é possível definir um seletor **por domínio**, além do seletor padrão —
   útil quando cada site usa uma estrutura diferente.
@@ -125,7 +125,7 @@ dois campos; o outro continua usando o padrão.
 
 A senha **não passa pelo popup**: o popup só informa a aba e o domínio, e quem descriptografa
 e injeta na página é o processo de fundo, dono da chave. Em páginas restritas (`about:`,
-`file:`) ou sem campos, falha em silêncio.
+`chrome://`, `file:`, lojas de extensões) ou sem campos, falha em silêncio.
 
 Duas páginas de exemplo para testar localmente: `examples/login-simples.html` (formato comum)
 e `examples/login-campos-atipicos.html` (fallback e overrides).

@@ -41,7 +41,12 @@ divergências são isoladas:
   Chrome. Use sempre `browser.*` no código (nunca `chrome.*` direto).
 - **Empacotar:** `./scripts/empacotar.sh` gera os dois pacotes (com a versão do manifesto no
   nome do `.zip`); aceita `firefox`/`chrome` para um só. O alvo chrome roda
-  `scripts/gerar-icones.sh` para rasterizar os PNGs do SVG.
+  `scripts/gerar-icones.sh` para rasterizar os PNGs do SVG (sempre que faltarem ou o SVG for
+  mais novo que eles).
+- **Manter os manifestos em dia:** `version`, `description`, `permissions` e a CSP devem ser
+  **idênticos** entre `manifest.json` e `manifest.chrome.json` (só `background` e `icons`/
+  `browser_specific_settings` divergem de propósito) — `tests/manifestos.test.js` garante isso.
+  Ao mudar um desses campos, atualize os dois manifestos na mesma alteração.
 
 Estrutura de pastas planejada (ver `ia/01`):
 

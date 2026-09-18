@@ -4,8 +4,9 @@
 
 /**
  * Extrai o domínio (hostname) da aba ativa. Retorna `null` quando não há um
- * domínio http(s) utilizável: aba sem `url`, páginas `about:`/`file:`/
- * `moz-extension:`, ou URL ausente por restrição de permissão. Nunca lança.
+ * domínio http(s) utilizável: aba sem `url`, páginas `about:`/`chrome:`/`file:`/
+ * `moz-extension:`/`chrome-extension:`, ou URL ausente por restrição de permissão.
+ * Nunca lança.
  * @param {{url?: string}|null|undefined} aba
  * @returns {string|null} hostname (já minúsculo pelo parser nativo) ou null.
  */

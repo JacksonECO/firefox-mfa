@@ -43,7 +43,11 @@ empacotar_firefox() {
 
 empacotar_chrome() {
   # O Chrome não renderiza SVG no manifest — garante os PNGs antes de empacotar.
-  [ -f icons/icon-128.png ] || ./scripts/gerar-icones.sh
+  # Regenera também se o SVG foi editado depois do último PNG (evita empacotar
+  # ícone desatualizado, como aconteceu quando o icon.svg mudou na task 28).
+  if [ ! -f icons/icon-128.png ] || [ icons/icon.svg -nt icons/icon-128.png ]; then
+    ./scripts/gerar-icones.sh
+  fi
   # O Chrome exige manifest.json na raiz do pacote — montamos um staging dir com o
   # manifest.chrome.json renomeado.
   local versao stage out
